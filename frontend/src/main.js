@@ -71,7 +71,13 @@ window.addEventListener('message', async (e) => {
         const base = registry.get(m.id)?.version;
         const { version } = await api.putFile(m.id, m.data, base);
         registry.set(m.id, { version }); // adopt our own write's version → poll won't echo it back
+        // Rejoin the poll set: after a shell reload openIds is empty, so an
+        // autosave to a still-open file would persist but stop receiving
+        // collaboration. Re-adopting it here re-resumes polling (echo-safe — we
+        // just took this file's own version, so the next poll reads unchanged).
+        openIds.add(m.id);
         postToEditor({ action: 'saved', id: m.id, version });
+        renderTreeOpenState();
         setStatus(`saved ${m.id}`);
       } catch (err) {
         postToEditor({ action: 'error', id: m.id, message: err.message });
