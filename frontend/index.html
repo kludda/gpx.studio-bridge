@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>gpx.studio bridge — host shell</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <strong class="brand">gpx.studio bridge</strong>
+    <div class="menu">
+      <button id="openBtn" class="menu-btn">File ▸ Open…</button>
+      <div id="openPopup" class="popup" hidden>
+        <div class="popup-head">
+          <span>Server files</span>
+          <button id="refreshBtn" title="Reload list">⟳</button>
+        </div>
+        <div id="fileTree" class="tree"></div>
+      </div>
+    </div>
+    <span id="status" class="status"></span>
+  </div>
+
+  <iframe id="editor" class="editor" title="editor"></iframe>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
