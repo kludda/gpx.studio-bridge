@@ -29,7 +29,7 @@
     // and logs whatever the editor emits. Used to build editor embed mode
     // (M5+) without the full shell/backend.
     const params = new URLSearchParams(location.search);
-    const DEFAULT_SRC = params.get('src') || 'http://localhost:5173/app?embed=1';
+    const DEFAULT_SRC = params.get('src') || 'http://localhost:5173/app?embedded=1';
     const srcInput = document.getElementById('src');
     srcInput.value = DEFAULT_SRC;
 
