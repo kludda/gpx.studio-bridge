@@ -12,10 +12,12 @@ last-write-wins via polling.
 ## Run (3 processes)
 
 ```bash
-# 1. Backend — folder store on :3001
+# 1. Backend — folder store on :3001 (interactive API docs at /docs and /redoc)
 cd backend
 python -m venv .venv && .venv/bin/pip install -r requirements.txt   # first time
-GPX_DATA_DIR=/path/to/scratch .venv/bin/uvicorn main:app --reload --port 3001
+cp .env.example .env                                                # first time; edit GPX_DATA_DIR / ROOT_PATH
+.venv/bin/uvicorn main:app --reload --port 3001 --env-file .env
+# (or pass vars inline, no .env needed: GPX_DATA_DIR=/scratch .venv/bin/uvicorn main:app --port 3001)
 
 # 2. Editor (the gpx.studio fork, embedded-dev branch) — pinned to :5180
 cd ../../gpx.studio/website
@@ -30,7 +32,8 @@ VITE_EDITOR_URL=http://localhost:5180/app?embedded=1 npm run dev
 
 Open **http://localhost:5174**. (Leave `VITE_EDITOR_URL` unset to use the mock `fake-editor.html`.)
 Config lives in `frontend/.env` — see `frontend/.env.example` (`VITE_API_BASE`, `VITE_EDITOR_URL`,
-`VITE_POLL_MS`).
+`VITE_POLL_MS`). Backend config is `backend/.env` — see `backend/.env.example` (`GPX_DATA_DIR`,
+`ROOT_PATH`), loaded via uvicorn's `--env-file`.
 
 ## CORS "fix" (required)
 
@@ -150,6 +153,18 @@ VITE_EDITOR_URL=http://gpxstudio.example.com/app?embedded=1
 `VITE_EDITOR_URL` is also the source of the bridge's `EDITOR_ORIGIN` (used to target outbound
 postMessage and to validate inbound), so it must be the editor's real origin. Each side allows the
 **other's** origin, never its own.
+
+**Backend** — when the proxy strips the `/api` prefix, tell FastAPI its public prefix so the
+auto-generated docs reference `/api/openapi.json` (not `/openapi.json` at the site root). Set
+`ROOT_PATH` on the proxied launch:
+
+```bash
+GPX_DATA_DIR=/path/to/scratch ROOT_PATH=/api .venv/bin/uvicorn main:app --port 3001
+```
+
+The interactive docs are then at **`http://gpx.example.com/api/docs`** (Swagger UI) and
+`…/api/redoc` (ReDoc); the schema is at `…/api/openapi.json`. Leave `ROOT_PATH` unset for direct
+access (`localhost:3001/docs`). Equivalent without the env var: `uvicorn … --root-path /api`.
 
 ### Vite host check
 
