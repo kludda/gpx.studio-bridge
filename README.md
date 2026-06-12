@@ -35,6 +35,88 @@ Config lives in `frontend/.env` — see `frontend/.env.example` (`VITE_API_BASE`
 `VITE_POLL_MS`). Backend config is `backend/.env` — see `backend/.env.example` (`GPX_DATA_DIR`,
 `ROOT_PATH`), loaded via uvicorn's `--env-file`.
 
+## The embed protocol (postMessage)
+
+Modelled on [draw.io's embed protocol](https://github.com/jgraph/drawio/discussions/5612):
+JSON objects over `window.postMessage`, activated by loading the editor with **`?embedded=1`**
+(not `?embed=1` — that hits upstream's legacy read-only map-embed redirect). The editor owns no
+files; it receives GPX bytes and emits GPX bytes, and the bridge (host) owns storage, identity and
+versioning. The two run in the same browser at **different origins** (editor iframe vs. shell), so
+every message is origin-checked.
+
+**Field convention (draw.io-style, note the asymmetry):**
+
+- **Editor → host** messages carry an **`event`** field. The host ignores any message whose
+  `origin` isn't the editor's, and switches on `msg.event`.
+- **Host → editor** messages carry an **`action`** field. The editor ignores any object without an
+  `action`, pins the host's origin on the first accepted message (trust-on-first-use unless
+  `VITE_EMBED_ALLOWED_ORIGINS` is set), and switches on `msg.action`.
+
+**Identity.** The host **`id` is the file's path relative to the store root** (e.g.
+`trips/day1.gpx`). Inside the iframe the editor uses its own local ids (`gpx-N`) and keeps a
+`localId ↔ hostId` registry — only `id`/`hostId` ever crosses `postMessage`. **`version`** is an
+opaque token (the backend's `st_mtime_ns`) used for last-write-wins.
+
+### Handshake
+
+```
+editor (iframe, ?embedded=1)                 host (bridge shell)
+  │  restore registry, attach listeners        │
+  │ ──{event:'init'}──────────────────────────▶│  "editor ready"
+  │                                             │  GET /file  → bytes+version
+  │ ◀─{action:'load', id, data, title?, ───────│  (first file; addFile for more)
+  │      autosave:1}                            │
+  │  parseGPX, open, map id↔localId             │
+  │ ──{event:'load', id}──────────────────────▶│  (ack; informational)
+```
+
+Until the first inbound message arrives the editor doesn't yet know the host's origin, so its
+`init` is announced with `targetOrigin: '*'`; thereafter it targets the pinned host origin.
+
+### Editor → host (`event`)
+
+| Message | When |
+| --- | --- |
+| `{event:'init'}` | Editor mounted and ready; expects `load`/`addFile`. |
+| `{event:'load', id}` | Ack of a finished `load`/`addFile`. |
+| `{event:'autosave', id, data}` | Debounced (~`AUTOSAVE_DEBOUNCE_MS`) on any local change to a **server-backed** file. `data` = full `buildGPX` text. |
+| `{event:'save', id, data}` | Explicit save. Host treats it identically to `autosave`; the editor currently emits `autosave` for all local edits. |
+| `{event:'saveToHost', tempId, data, name?}` | **Promotion** — "Save to server" on a browser-only file. `name` is derived from the file metadata (`<name>.gpx`, else `untitled.gpx`). Asks the host to create a resource and reply `assignId`. |
+| `{event:'export', format, data}` | Optional; not implemented in the POC. |
+
+### Host → editor (`action`)
+
+| Message | Effect |
+| --- | --- |
+| `{action:'load', id, data, title?, autosave:1}` | Load the first file: editor `parseGPX`s, opens it, maps `id ↔ localId`, selects it. |
+| `{action:'addFile', id, data, title?}` | Add another file to the same editor instance (multi-file open). |
+| `{action:'merge', id, data}` | Whole-file LWW replace of an already-open file (collaboration inbound from the poll loop). Preserves the map viewport. |
+| `{action:'removeFile', id}` | Host removed file `id`; editor closes it. |
+| `{action:'saved', id, version}` | **Ack** that an `autosave`/`save`/promotion persisted → drives the "Saved" status. `version` is adopted so the next poll won't echo the write back. |
+| `{action:'assignId', tempId, id}` | Promotion response: bind the local temp file to its new host `id` (path). |
+| `{action:'error', id, message}` | Persist failed → "Error" status. |
+| `{action:'configure', config?}` | Optional pre-init config (units/theme); accepted but unused in the POC. |
+
+`saved`/`error` acks are the only real additions beyond draw.io's set — they power the status badge
+without a websocket: the host just relays the result of its write back into the iframe.
+
+### Promotion (browser-only file → server)
+
+```
+editor ──{event:'saveToHost', tempId, data, name}──▶ host  POST /file  (auto-suffix on collision)
+editor ◀──{action:'assignId', tempId, id}─────────── host  (bind localId → new path)
+editor ◀──{action:'saved', id, version}───────────── host  (status "Saved"; host starts polling id)
+```
+
+### Collaboration (last-write-wins, poll-based — no websocket)
+
+The host polls `GET /files` every `VITE_POLL_MS`. When an **open** file's `version` is newer than the
+registry's, it `GET /file`s the bytes and pushes `{action:'merge', id, data}`. Local edits flow the
+other way as `autosave` → `PUT /file` → `{action:'saved', id, version}`; the host adopts its own
+write's version so it doesn't immediately re-`merge` its own change. Whole-file replace throughout —
+deliberately simple. A real platform host (OpenCloud/Nextcloud) is the same protocol with WebDAV
+storage and an ETag `version`.
+
 ## CORS "fix" (required)
 
 gpx.studio's backend services (`styles/tiles/fonts/sprites/graphhopper/overpass.gpx.studio`) only
