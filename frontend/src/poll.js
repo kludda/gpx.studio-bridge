@@ -27,7 +27,7 @@ export function createPoller({ api, registry, openIds, postToEditor, intervalMs,
       for (const path of [...openIds]) {
         if (!serverVersion.has(path)) {
           // File removed on the server while open → close it in the editor.
-          postToEditor({ action: 'removeFile', id: path });
+          postToEditor({ action: 'remove', id: path });
           openIds.delete(path);
           registry.delete(path);
           setStatus?.(`removed ${path}`);

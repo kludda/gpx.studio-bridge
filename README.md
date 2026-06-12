@@ -89,7 +89,7 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 | --- | --- |
 | `{action:'load', id, data, title?, autosave:1}` | Open a file (one per opened file — multi-file): editor `parseGPX`s, opens it, maps `id ↔ localId`, and **selects** it. |
 | `{action:'merge', id, data}` | Whole-file LWW replace of an already-open file (collaboration inbound from the poll loop). Preserves the map viewport. |
-| `{action:'removeFile', id}` | Host removed file `id`; editor closes it. |
+| `{action:'remove', id}` | Host removed file `id`; editor closes it. |
 | `{action:'status', id, ok, version?, message?}` | **Ack** of a write outcome (`autosave`/`save`/promotion). `ok:true` carries the new `version` (adopted so the next poll won't echo the write back) → "Saved"; `ok:false` carries `message` → "Error". |
 | `{action:'assignId', tempId, id}` | Promotion response: bind the local temp file to its new host `id` (path). |
 
