@@ -80,8 +80,8 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 | `{event:'init'}` | Editor mounted and ready; expects `load`. |
 | `{event:'load', id}` | Ack of a finished `load`. |
 | `{event:'autosave', id, data}` | Debounced (~`AUTOSAVE_DEBOUNCE_MS`) on any local change to a **server-backed** file. `data` = full `buildGPX` text. |
-| `{event:'save', id, data}` | Explicit save. Host treats it identically to `autosave`; the editor currently emits `autosave` for all local edits. |
-| `{event:'saveToHost', tempId, data, name?}` | **Promotion** — "Save to server" on a browser-only file. `name` is derived from the file metadata (`<name>.gpx`, else `untitled.gpx`). Asks the host to create a resource and reply `assignId`. |
+| `{event:'save', id, data}` | Explicit save of a server-backed file. Host treats it identically to `autosave`; the editor currently emits `autosave` for all local edits. |
+| `{event:'save', tempId, data, name?}` | **Promotion** — "Save to server" on a browser-only file: a `save` with **no `id`**. `tempId` is the editor's local id; `name` is derived from the file metadata (`<name>.gpx`, else `untitled.gpx`). Host creates the resource and binds it back via `status` (carrying `tempId`). |
 
 ### Host → editor (`action`)
 
@@ -90,18 +90,18 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 | `{action:'load', id, data, title?, autosave:1}` | Open a file (one per opened file — multi-file): editor `parseGPX`s, opens it, maps `id ↔ localId`, and **selects** it. |
 | `{action:'merge', id, data}` | Whole-file LWW replace of an already-open file (collaboration inbound from the poll loop). Preserves the map viewport. |
 | `{action:'remove', id}` | Host removed file `id`; editor closes it. |
-| `{action:'status', id, ok, version?, message?}` | **Ack** of a write outcome (`autosave`/`save`/promotion). `ok:true` carries the new `version` (adopted so the next poll won't echo the write back) → "Saved"; `ok:false` carries `message` → "Error". |
-| `{action:'assignId', tempId, id}` | Promotion response: bind the local temp file to its new host `id` (path). |
+| `{action:'status', id, ok, version?, message?, tempId?}` | **Ack** of a write outcome (`autosave`/`save`/promotion). `ok:true` carries the new `version` (adopted so the next poll won't echo the write back) → "Saved"; `ok:false` carries `message` → "Error". On a **promotion** ack it also carries `tempId` — no `id↔localId` binding exists yet, so this is how the editor binds its local file to the new path. |
 
 The `status` ack is the only real addition beyond draw.io's set — it powers the status badge
-without a websocket: the host just relays the result of its write back into the iframe.
+without a websocket: the host just relays the result of its write back into the iframe. A
+promotion needs no extra message: it is a `save` with no `id`, and `status` (carrying `tempId`)
+both acks the write and delivers the binding.
 
 ### Promotion (browser-only file → server)
 
 ```
-editor ──{event:'saveToHost', tempId, data, name}──▶ host  POST /file  (auto-suffix on collision)
-editor ◀──{action:'assignId', tempId, id}─────────────── host  (bind localId → new path)
-editor ◀──{action:'status', id, ok:true, version}─────── host  (status "Saved"; host starts polling id)
+editor ──{event:'save', tempId, data, name}──────────────▶ host  POST /file  (auto-suffix on collision)
+editor ◀──{action:'status', tempId, id, ok:true, version}── host  (bind localId → path; "Saved"; host starts polling id)
 ```
 
 ### Collaboration (last-write-wins, poll-based — no websocket)

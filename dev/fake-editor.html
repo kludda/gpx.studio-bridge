@@ -33,8 +33,8 @@
   <div class="promote">
     <strong>New local file → Save to server</strong><br />
     <label>name: <input id="newName" value="new-track.gpx" /></label>
-    <button id="newSave">saveToHost</button>
-    <p class="hint">Posts <code>{event:'saveToHost', tempId, data, name}</code>; host replies <code>assignId</code>.</p>
+    <button id="newSave">Save to server</button>
+    <p class="hint">Posts <code>{event:'save', tempId, data, name}</code> (no <code>id</code>); host replies <code>status</code> carrying <code>tempId</code>.</p>
   </div>
 
   <script>
@@ -107,7 +107,8 @@
       // Render it locally so the assigned id can rebind onto it.
       renderFile(tempId, `<!-- new local file: ${name} -->\n`, name + ' (local)');
       setDot(tempId, 'saving');
-      post({ event: 'saveToHost', tempId, data: nodes.get(tempId).textarea.value, name });
+      // Promotion is a save with no `id`; the host binds it back via `status` (carrying tempId).
+      post({ event: 'save', tempId, data: nodes.get(tempId).textarea.value, name });
     };
 
     // ---- Inbound (host → editor) ------------------------------------------
@@ -128,18 +129,21 @@
         case 'remove':
           dropFile(m.id);
           break;
-        case 'status':
-          setDot(m.id, m.ok ? 'saved' : 'error');
-          break;
-        case 'assignId': {
-          // rebind temp local file to its new host id
-          const n = nodes.get(m.tempId);
-          if (n) {
-            nodes.delete(m.tempId);
-            nodes.set(m.id, n);
-            n.label.textContent = m.id;
+        case 'status': {
+          // On a promotion ack the host carries `tempId` (no binding existed yet).
+          // On success, rebind the temp local file onto its new host id; on failure
+          // the file is still keyed by tempId, so flip the dot there.
+          if (m.ok && m.tempId) {
+            const n = nodes.get(m.tempId);
+            if (n) {
+              nodes.delete(m.tempId);
+              nodes.set(m.id, n);
+              n.label.textContent = m.id;
+            }
+            setDot(m.id, 'saved');
+          } else {
+            setDot(m.tempId ?? m.id, m.ok ? 'saved' : 'error');
           }
-          setDot(m.id, 'saved');
           break;
         }
       }

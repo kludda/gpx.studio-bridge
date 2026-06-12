@@ -66,36 +66,33 @@ window.addEventListener('message', async (e) => {
 
     case 'autosave':
     case 'save':
+      // `id` present → update an existing file; absent → promotion: create from
+      // `tempId`+`name` and bind it back to the editor via `status` (no separate assignId).
       try {
-        const base = registry.get(m.id)?.version;
-        const { version } = await api.putFile(m.id, m.data, base);
-        registry.set(m.id, { version }); // adopt our own write's version → poll won't echo it back
-        // Rejoin the poll set: after a shell reload openIds is empty, so an
-        // autosave to a still-open file would persist but stop receiving
-        // collaboration. Re-adopting it here re-resumes polling (echo-safe — we
-        // just took this file's own version, so the next poll reads unchanged).
-        openIds.add(m.id);
-        postToEditor({ action: 'status', id: m.id, ok: true, version });
+        if (m.id) {
+          const base = registry.get(m.id)?.version;
+          const { version } = await api.putFile(m.id, m.data, base);
+          registry.set(m.id, { version }); // adopt our own write's version → poll won't echo it back
+          // Rejoin the poll set: after a shell reload openIds is empty, so an
+          // autosave to a still-open file would persist but stop receiving
+          // collaboration. Re-adopting it here re-resumes polling (echo-safe — we
+          // just took this file's own version, so the next poll reads unchanged).
+          openIds.add(m.id);
+          postToEditor({ action: 'status', id: m.id, ok: true, version });
+          setStatus(`saved ${m.id}`);
+        } else {
+          const { path, version } = await api.createFile(m.name || 'untitled.gpx', m.data);
+          registry.set(path, { version });
+          openIds.add(path);
+          // tempId tells the editor which local file to bind to the new path.
+          postToEditor({ action: 'status', tempId: m.tempId, id: path, ok: true, version });
+          setStatus(`created ${path}`);
+        }
         renderTreeOpenState();
-        setStatus(`saved ${m.id}`);
       } catch (err) {
-        postToEditor({ action: 'status', id: m.id, ok: false, message: err.message });
+        // tempId set on a create failure, id set on an update failure — send whichever we have.
+        postToEditor({ action: 'status', tempId: m.tempId, id: m.id, ok: false, message: err.message });
         setStatus(`save failed: ${err.message}`);
-      }
-      break;
-
-    case 'saveToHost':
-      try {
-        const { path, version } = await api.createFile(m.name || 'untitled.gpx', m.data);
-        registry.set(path, { version });
-        openIds.add(path);
-        postToEditor({ action: 'assignId', tempId: m.tempId, id: path });
-        postToEditor({ action: 'status', id: path, ok: true, version });
-        setStatus(`created ${path}`);
-        renderTreeOpenState();
-      } catch (err) {
-        postToEditor({ action: 'status', id: m.tempId, ok: false, message: err.message });
-        setStatus(`create failed: ${err.message}`);
       }
       break;
   }

@@ -58,13 +58,13 @@
         postToEditor({ action: 'load', id: 'sample.gpx', data: SAMPLE, title: 'Sample', autosave: 1 });
       }
       if (m.event === 'autosave' || m.event === 'save') {
-        // ack the write so the editor's status badge can flip to "Saved"
-        postToEditor({ action: 'status', id: m.id, ok: true, version: Date.now() });
-      }
-      if (m.event === 'saveToHost') {
-        const id = m.name || 'promoted.gpx';
-        postToEditor({ action: 'assignId', tempId: m.tempId, id });
-        postToEditor({ action: 'status', id, ok: true, version: Date.now() });
+        // `id` present → update; absent → promotion: create and bind back via `status` (carrying tempId)
+        if (m.id) {
+          postToEditor({ action: 'status', id: m.id, ok: true, version: Date.now() });
+        } else {
+          const id = m.name || 'promoted.gpx';
+          postToEditor({ action: 'status', tempId: m.tempId, id, ok: true, version: Date.now() });
+        }
       }
     });
 
