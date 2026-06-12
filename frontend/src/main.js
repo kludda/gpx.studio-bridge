@@ -76,11 +76,11 @@ window.addEventListener('message', async (e) => {
         // collaboration. Re-adopting it here re-resumes polling (echo-safe — we
         // just took this file's own version, so the next poll reads unchanged).
         openIds.add(m.id);
-        postToEditor({ action: 'saved', id: m.id, version });
+        postToEditor({ action: 'status', id: m.id, ok: true, version });
         renderTreeOpenState();
         setStatus(`saved ${m.id}`);
       } catch (err) {
-        postToEditor({ action: 'error', id: m.id, message: err.message });
+        postToEditor({ action: 'status', id: m.id, ok: false, message: err.message });
         setStatus(`save failed: ${err.message}`);
       }
       break;
@@ -91,11 +91,11 @@ window.addEventListener('message', async (e) => {
         registry.set(path, { version });
         openIds.add(path);
         postToEditor({ action: 'assignId', tempId: m.tempId, id: path });
-        postToEditor({ action: 'saved', id: path, version });
+        postToEditor({ action: 'status', id: path, ok: true, version });
         setStatus(`created ${path}`);
         renderTreeOpenState();
       } catch (err) {
-        postToEditor({ action: 'error', id: m.tempId, message: err.message });
+        postToEditor({ action: 'status', id: m.tempId, ok: false, message: err.message });
         setStatus(`create failed: ${err.message}`);
       }
       break;

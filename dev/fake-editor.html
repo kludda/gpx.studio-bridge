@@ -132,8 +132,8 @@
         case 'removeFile':
           dropFile(m.id);
           break;
-        case 'saved':
-          setDot(m.id, 'saved');
+        case 'status':
+          setDot(m.id, m.ok ? 'saved' : 'error');
           break;
         case 'assignId': {
           // rebind temp local file to its new host id
@@ -146,9 +146,6 @@
           setDot(m.id, 'saved');
           break;
         }
-        case 'error':
-          setDot(m.id, 'error');
-          break;
       }
     });
 

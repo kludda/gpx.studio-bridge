@@ -59,12 +59,12 @@
       }
       if (m.event === 'autosave' || m.event === 'save') {
         // ack the write so the editor's status badge can flip to "Saved"
-        postToEditor({ action: 'saved', id: m.id, version: Date.now() });
+        postToEditor({ action: 'status', id: m.id, ok: true, version: Date.now() });
       }
       if (m.event === 'saveToHost') {
         const id = m.name || 'promoted.gpx';
         postToEditor({ action: 'assignId', tempId: m.tempId, id });
-        postToEditor({ action: 'saved', id, version: Date.now() });
+        postToEditor({ action: 'status', id, ok: true, version: Date.now() });
       }
     });
 

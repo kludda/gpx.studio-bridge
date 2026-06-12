@@ -91,27 +91,26 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 | `{action:'addFile', id, data, title?}` | Add another file to the same editor instance (multi-file open). |
 | `{action:'merge', id, data}` | Whole-file LWW replace of an already-open file (collaboration inbound from the poll loop). Preserves the map viewport. |
 | `{action:'removeFile', id}` | Host removed file `id`; editor closes it. |
-| `{action:'saved', id, version}` | **Ack** that an `autosave`/`save`/promotion persisted → drives the "Saved" status. `version` is adopted so the next poll won't echo the write back. |
+| `{action:'status', id, ok, version?, message?}` | **Ack** of a write outcome (`autosave`/`save`/promotion). `ok:true` carries the new `version` (adopted so the next poll won't echo the write back) → "Saved"; `ok:false` carries `message` → "Error". |
 | `{action:'assignId', tempId, id}` | Promotion response: bind the local temp file to its new host `id` (path). |
-| `{action:'error', id, message}` | Persist failed → "Error" status. |
 | `{action:'configure', config?}` | Optional pre-init config (units/theme); accepted but unused in the POC. |
 
-`saved`/`error` acks are the only real additions beyond draw.io's set — they power the status badge
+The `status` ack is the only real addition beyond draw.io's set — it powers the status badge
 without a websocket: the host just relays the result of its write back into the iframe.
 
 ### Promotion (browser-only file → server)
 
 ```
 editor ──{event:'saveToHost', tempId, data, name}──▶ host  POST /file  (auto-suffix on collision)
-editor ◀──{action:'assignId', tempId, id}─────────── host  (bind localId → new path)
-editor ◀──{action:'saved', id, version}───────────── host  (status "Saved"; host starts polling id)
+editor ◀──{action:'assignId', tempId, id}─────────────── host  (bind localId → new path)
+editor ◀──{action:'status', id, ok:true, version}─────── host  (status "Saved"; host starts polling id)
 ```
 
 ### Collaboration (last-write-wins, poll-based — no websocket)
 
 The host polls `GET /files` every `VITE_POLL_MS`. When an **open** file's `version` is newer than the
 registry's, it `GET /file`s the bytes and pushes `{action:'merge', id, data}`. Local edits flow the
-other way as `autosave` → `PUT /file` → `{action:'saved', id, version}`; the host adopts its own
+other way as `autosave` → `PUT /file` → `{action:'status', id, ok:true, version}`; the host adopts its own
 write's version so it doesn't immediately re-`merge` its own change. Whole-file replace throughout —
 deliberately simple. A real platform host (OpenCloud/Nextcloud) is the same protocol with WebDAV
 storage and an ETag `version`.
