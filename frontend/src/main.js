@@ -20,7 +20,7 @@ function postToEditor(msg) {
 
 // --------------------------------------------------------------------------- //
 // Host registry: id (relative path) → { version }. `openIds` are the files
-// currently framed in the editor (drives load-vs-addFile and, later, polling).
+// currently framed in the editor (drives polling, and dedupes re-opens).
 // --------------------------------------------------------------------------- //
 const registry = new Map();
 const openIds = new Set();
@@ -40,9 +40,8 @@ async function openFile(path) {
   try {
     const { data, version } = await api.getFile(path);
     registry.set(path, { version });
-    const action = openIds.size === 0 ? 'load' : 'addFile';
     openIds.add(path);
-    postToEditor({ action, id: path, data, title: path.split('/').pop(), autosave: 1 });
+    postToEditor({ action: 'load', id: path, data, title: path.split('/').pop(), autosave: 1 });
     setStatus(`opened ${path}`);
     renderTreeOpenState();
     closePopup();

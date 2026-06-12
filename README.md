@@ -64,7 +64,7 @@ editor (iframe, ?embedded=1)                 host (bridge shell)
   │  restore registry, attach listeners        │
   │ ──{event:'init'}──────────────────────────▶│  "editor ready"
   │                                             │  GET /file  → bytes+version
-  │ ◀─{action:'load', id, data, title?, ───────│  (first file; addFile for more)
+  │ ◀─{action:'load', id, data, title?, ───────│  (one per opened file)
   │      autosave:1}                            │
   │  parseGPX, open, map id↔localId             │
   │ ──{event:'load', id}──────────────────────▶│  (ack; informational)
@@ -77,8 +77,8 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 
 | Message | When |
 | --- | --- |
-| `{event:'init'}` | Editor mounted and ready; expects `load`/`addFile`. |
-| `{event:'load', id}` | Ack of a finished `load`/`addFile`. |
+| `{event:'init'}` | Editor mounted and ready; expects `load`. |
+| `{event:'load', id}` | Ack of a finished `load`. |
 | `{event:'autosave', id, data}` | Debounced (~`AUTOSAVE_DEBOUNCE_MS`) on any local change to a **server-backed** file. `data` = full `buildGPX` text. |
 | `{event:'save', id, data}` | Explicit save. Host treats it identically to `autosave`; the editor currently emits `autosave` for all local edits. |
 | `{event:'saveToHost', tempId, data, name?}` | **Promotion** — "Save to server" on a browser-only file. `name` is derived from the file metadata (`<name>.gpx`, else `untitled.gpx`). Asks the host to create a resource and reply `assignId`. |
@@ -87,8 +87,7 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 
 | Message | Effect |
 | --- | --- |
-| `{action:'load', id, data, title?, autosave:1}` | Load the first file: editor `parseGPX`s, opens it, maps `id ↔ localId`, selects it. |
-| `{action:'addFile', id, data, title?}` | Add another file to the same editor instance (multi-file open). |
+| `{action:'load', id, data, title?, autosave:1}` | Open a file (one per opened file — multi-file): editor `parseGPX`s, opens it, maps `id ↔ localId`, and **selects** it. |
 | `{action:'merge', id, data}` | Whole-file LWW replace of an already-open file (collaboration inbound from the poll loop). Preserves the map viewport. |
 | `{action:'removeFile', id}` | Host removed file `id`; editor closes it. |
 | `{action:'status', id, ok, version?, message?}` | **Ack** of a write outcome (`autosave`/`save`/promotion). `ok:true` carries the new `version` (adopted so the next poll won't echo the write back) → "Saved"; `ok:false` carries `message` → "Error". |

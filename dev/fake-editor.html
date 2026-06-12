@@ -116,7 +116,6 @@
       const m = e.data || {};
       switch (m.action) {
         case 'load':
-        case 'addFile':
           renderFile(m.id, m.data, m.title);
           setDot(m.id, 'saved'); // freshly loaded == in sync with host
           post({ event: 'load', id: m.id }); // ack
