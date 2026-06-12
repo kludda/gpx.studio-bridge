@@ -93,7 +93,6 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 | `{action:'removeFile', id}` | Host removed file `id`; editor closes it. |
 | `{action:'status', id, ok, version?, message?}` | **Ack** of a write outcome (`autosave`/`save`/promotion). `ok:true` carries the new `version` (adopted so the next poll won't echo the write back) → "Saved"; `ok:false` carries `message` → "Error". |
 | `{action:'assignId', tempId, id}` | Promotion response: bind the local temp file to its new host `id` (path). |
-| `{action:'configure', config?}` | Optional pre-init config (units/theme); accepted but unused in the POC. |
 
 The `status` ack is the only real addition beyond draw.io's set — it powers the status badge
 without a websocket: the host just relays the result of its write back into the iframe.

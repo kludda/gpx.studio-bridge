@@ -115,9 +115,6 @@
       if (ALLOWED_PARENT !== '*' && e.origin !== ALLOWED_PARENT) return;
       const m = e.data || {};
       switch (m.action) {
-        case 'configure':
-          // no-op for the mock; could set units/theme
-          break;
         case 'load':
         case 'addFile':
           renderFile(m.id, m.data, m.title);
