@@ -82,7 +82,6 @@ Until the first inbound message arrives the editor doesn't yet know the host's o
 | `{event:'autosave', id, data}` | Debounced (~`AUTOSAVE_DEBOUNCE_MS`) on any local change to a **server-backed** file. `data` = full `buildGPX` text. |
 | `{event:'save', id, data}` | Explicit save. Host treats it identically to `autosave`; the editor currently emits `autosave` for all local edits. |
 | `{event:'saveToHost', tempId, data, name?}` | **Promotion** — "Save to server" on a browser-only file. `name` is derived from the file metadata (`<name>.gpx`, else `untitled.gpx`). Asks the host to create a resource and reply `assignId`. |
-| `{event:'export', format, data}` | Optional; not implemented in the POC. |
 
 ### Host → editor (`action`)
 
