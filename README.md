@@ -117,111 +117,85 @@ storage and an ETag `version`.
 
 gpx.studio's backend services (`styles/tiles/fonts/sprites/graphhopper/overpass.gpx.studio`) only
 send CORS headers for the `https://gpx.studio` origin, so from any other origin the
-basemap/routing/elevation/POIs silently fail ("tools dead"). Two ways to deal with it:
+basemap/routing/elevation/POIs silently fail ("tools dead"). The fix is to fetch them
+**same-origin** — proxy them through the editor's own Vite dev server, so the browser never makes a
+cross-origin request and CORS simply never applies.
 
-### Option A — reverse proxy (works in normal browsers; recommended)
+### Option A — Vite dev-server proxy (recommended; self-contained)
 
-Put a reverse proxy in front that re-points each upstream service to your own hostname and rewrites
-the CORS header to `*`. This is the only option that works in everyday browsers (Chrome, Firefox,
-Edge, mobile) with no flags. See **[Reverse proxy (Caddy)](#reverse-proxy-caddy)** below.
+The editor's `vite.config.ts` proxies each service under a relative path on its own origin, and
+`.env` points the `VITE_*_URL` vars at those paths:
+
+| service | proxy path (`vite.config.ts`) | env (`.env`) |
+| --- | --- | --- |
+| graphhopper | `/graphhopper` → `graphhopper.gpx.studio` | `VITE_GRAPHHOPPER_URL=/graphhopper` |
+| styles | `/styles` → `styles.gpx.studio` | `VITE_STYLES_URL=/styles` |
+| tiles | `/tiles` → `tiles.gpx.studio` | `VITE_TILES_URL=/tiles` |
+| overpass | `/overpass` → `overpass.gpx.studio` | `VITE_OVERPASS_URL=/overpass` |
+
+Because the fetch is same-origin, there's **no CORS, no preflight, and no mixed-content** to manage —
+the whole fix lives in the repo (`vite.config.ts` + `.env`). The bridge backend is handled the same
+way (`frontend/vite.config.js` proxies `/api` → `:3001`), so the external reverse proxy only has to
+route the two app domains — it no longer touches the gpx.studio services. See
+**[Reverse proxy (two app domains)](#reverse-proxy-two-app-domains)**.
+
+> **Limitation — dev only.** `server.proxy` is a feature of the Vite *dev server*. A production
+> `vite build` (static files) has no proxy, so a real deployment must move the service-proxying back
+> to infrastructure (Caddy/nginx). Fine for this POC, which runs the dev servers.
 
 ### Option B — throwaway browser with web security off (quick local hack)
 
-For a one-off local check, open the shell in a **dedicated throwaway** browser profile with web
-security off (never your normal browser):
+To poke at the app without configuring the proxy/env, open the shell in a **dedicated throwaway**
+browser profile with web security off (never your normal browser):
 
 ```bash
 chromium --user-data-dir=/tmp/gpxdev --disable-web-security http://localhost:5174
 ```
 
-## Reverse proxy (Caddy)
+## Reverse proxy (two app domains)
 
-Serve both apps over two hostnames so the proxy can rewrite the upstreams' CORS headers, and the app
-runs in any browser unmodified:
+To run the app over real hostnames in any browser (no flags), put a reverse proxy in front that
+routes the **two app domains** to their dev servers. The gpx.studio services and the bridge backend
+are proxied *inside* Vite now (see the [CORS fix](#cors-fix-required) and the bridge's
+`frontend/vite.config.js` `/api` proxy), so the external proxy is just two dumb routes:
 
-- **`gpxstudio.example.com`** → the editor (whole domain to itself, so its root-relative
-  `/_app`, `/@vite` … assets resolve cleanly with no path mangling).
-- **`gpx.example.com`** → the bridge shell at `/`, the bridge backend at `/api`, and the
-  CORS-proxied gpx.studio services at `/gh`, `/tiles`, `/styles`, `/overpass`.
-
-The editor is cross-origin from the services (different host), so the `Access-Control-Allow-Origin: *`
-override is load-bearing. The bridge shell and its backend are **same-origin** (both
-`gpx.example.com`), so no CORS override is needed for `/api`.
+- **`gpxstudio.example.com`** → the editor (`:5180`). Whole domain to itself so its root-relative
+  `/_app`, `/@vite` … assets resolve cleanly with no path mangling.
+- **`gpx.example.com`** → the bridge shell (`:5174`), which serves the host UI and proxies `/api` to
+  the FastAPI backend itself.
 
 ```caddy
-# Reusable CORS-proxy to a real gpx.studio backend.
-# Usage:  import gpxsvc <upstream-host>
-# Requires Caddy v2.7+ for {args[0]} (older builds: use {args.0}).
-# NOTE: each `import gpxsvc …` must be on its own line for the Caddyfile parser.
-(gpxsvc) {
-	reverse_proxy https://{args[0]} {
-		# Present the gpx.studio vhost name to the upstream (TLS SNI + Host routing).
-		header_up Host {args[0]}
-		# Drop the upstream CORS header so it can't conflict with ours below.
-		header_down -Access-Control-Allow-Origin
-	}
-	# Force-allow any origin (the editor is cross-origin on gpxstudio.example.com).
-	header {
-		Access-Control-Allow-Origin "*"
-		Access-Control-Allow-Methods "GET, POST, OPTIONS"
-		Access-Control-Allow-Headers "Content-Type"
-	}
-	# Answer CORS preflight directly with 204 (don't bother the upstream).
-	@preflight method OPTIONS
-	respond @preflight 204
-}
-
 # --- Editor: whole domain to itself, so root-relative assets just work ---
 http://gpxstudio.example.com {
 	reverse_proxy <server-ip>:5180
 }
 
-# --- Bridge + proxied services ---
+# --- Bridge shell (proxies /api → backend internally via Vite) ---
 http://gpx.example.com {
-	handle_path /gh/* {
-		import gpxsvc graphhopper.gpx.studio
-	}
-	handle_path /tiles/* {
-		import gpxsvc tiles.gpx.studio
-	}
-	handle_path /styles/* {
-		import gpxsvc styles.gpx.studio
-	}
-	handle_path /overpass/* {
-		import gpxsvc overpass.gpx.studio
-	}
-
-	# Bridge backend (FastAPI folder store on :3001), same-origin -> plain proxy.
-	handle_path /api/* {
-		reverse_proxy <server-ip>:3001
-	}
-
-	# Bridge host shell --- everything else.
-	handle {
-		reverse_proxy <server-ip>:5174
-	}
+	reverse_proxy <server-ip>:5174
 }
 ```
 
-Replace `<server-ip>` with the machine running the three dev servers (e.g. `hostname -I`), and
+Replace `<server-ip>` with the machine running the dev servers (e.g. `hostname -I`), and
 `example.com` with your domain. The blocks use `http://` so Caddy serves plain HTTP; drop the scheme
 (or use `https://`) to get automatic certificates — see the TLS note at the end.
 
 ### Matching env
 
-**Editor** (`gpx.studio/website/.env`) — point each service at the proxy, and lock the embed origin
-to the bridge:
+**Editor** (`gpx.studio/website/.env`) — services are relative paths (proxied by Vite, scheme-
+agnostic), and lock the embed origin to the bridge:
 
 ```ini
-VITE_GRAPHHOPPER_URL=http://gpx.example.com/gh
-VITE_STYLES_URL=http://gpx.example.com/styles
-VITE_TILES_URL=http://gpx.example.com/tiles
-VITE_OVERPASS_URL=http://gpx.example.com/overpass
+VITE_GRAPHHOPPER_URL=/graphhopper
+VITE_STYLES_URL=/styles
+VITE_TILES_URL=/tiles
+VITE_OVERPASS_URL=/overpass
 # postMessage allowlist — the bridge's origin (unset = trust-on-first-use, POC default)
 VITE_EMBED_ALLOWED_ORIGINS=http://gpx.example.com
 ```
 
-**Bridge shell** (`frontend/.env`) — backend is same-origin (relative path), editor is its own host:
+**Bridge shell** (`frontend/.env`) — backend is same-origin via the Vite `/api` proxy, editor is its
+own host:
 
 ```ini
 VITE_API_BASE=/api
@@ -232,9 +206,9 @@ VITE_EDITOR_URL=http://gpxstudio.example.com/app?embedded=1
 postMessage and to validate inbound), so it must be the editor's real origin. Each side allows the
 **other's** origin, never its own.
 
-**Backend** — when the proxy strips the `/api` prefix, tell FastAPI its public prefix so the
-auto-generated docs reference `/api/openapi.json` (not `/openapi.json` at the site root). Set
-`ROOT_PATH` on the proxied launch:
+**Backend** — the bridge's `/api` Vite proxy strips the `/api` prefix, so tell FastAPI its public
+prefix so the auto-generated docs reference `/api/openapi.json` (not `/openapi.json` at the site
+root). Set `ROOT_PATH` on launch:
 
 ```bash
 GPX_DATA_DIR=/path/to/scratch ROOT_PATH=/api .venv/bin/uvicorn main:app --port 3001
@@ -257,11 +231,13 @@ server: { /* … */ allowedHosts: ['.example.com'] }
 
 ### Coverage caveat
 
-The proxy covers `graphhopper`, `tiles`, `styles`, `overpass` — **not** `fonts`/`sprites`, and the
-style JSON served from `styles.gpx.studio` still references `tiles`/`fonts`/`sprites` by their
+The Vite proxy covers `graphhopper`, `tiles`, `styles`, `overpass` — **not** `fonts`/`sprites`, and
+the style JSON served from `styles.gpx.studio` still references `tiles`/`fonts`/`sprites` by their
 original absolute URLs internally. So basic functionality (routing, elevation, terrain, POIs, most
 basemaps) works, but **some map styles render imperfectly**. Fully fixing them means also proxying
-fonts/sprites and rewriting the URLs inside the style JSON — out of scope for this POC.
+fonts/sprites and rewriting the URLs inside the style JSON — out of scope for this POC. (This caveat
+is identical whichever proxy does the work; it is a property of the upstream style JSON, not the
+proxy choice.)
 
 ### TLS
 
@@ -280,23 +256,28 @@ DNS challenge, e.g. with the Cloudflare plugin:
 ```
 
 (The DNS plugin must be compiled into your Caddy binary — `caddy list-modules | grep cloudflare`.)
-When you switch to HTTPS, update the `VITE_*` URLs above to `https://`.
+The service `VITE_*_URL`s are relative paths, so they're scheme-agnostic; when you switch to HTTPS
+only update the origin-bearing vars (`VITE_EDITOR_URL`, `VITE_EMBED_ALLOWED_ORIGINS`) to `https://`.
 
 ## Access from other machines (`--host`)
 
-Bind all three servers to all interfaces and use the host machine's LAN IP/hostname in the URLs
-(the iframe and API calls run in the *remote* browser, so `localhost` won't resolve there):
+Without Caddy, bind the two Vite servers to all interfaces and use the host machine's LAN
+IP/hostname for the *editor* (the iframe runs in the remote browser, so `localhost` won't resolve
+there). The backend stays on `localhost` — only the bridge's Vite `/api` proxy reaches it, and that
+hop is server-side:
 
 ```bash
 HOST=192.168.1.50    # this machine's LAN IP (e.g. `hostname -I`)
 
-# backend
-GPX_DATA_DIR=/path/to/scratch .venv/bin/uvicorn main:app --host 0.0.0.0 --port 3001
+# backend (local only; reached via the shell's /api proxy)
+GPX_DATA_DIR=/path/to/scratch ROOT_PATH=/api .venv/bin/uvicorn main:app --port 3001
 # editor
 npm run dev -- --host
-# shell — point API + editor at $HOST
-VITE_API_BASE=http://$HOST:3001 VITE_EDITOR_URL=http://$HOST:5180/app?embedded=1 npm run dev -- --host
+# shell — backend is same-origin (/api), point the iframe at $HOST
+VITE_API_BASE=/api VITE_EDITOR_URL=http://$HOST:5180/app?embedded=1 npm run dev -- --host
 ```
 
-Then on the other machine open `http://$HOST:5174` in a `--disable-web-security` browser (the CORS
-note above still applies). The backend already allows all origins (`allow_origins=["*"]`, POC only).
+Then on the other machine open `http://$HOST:5174` in a **normal** browser — no
+`--disable-web-security` needed, because the gpx.studio services and `/api` are proxied same-origin
+by the two Vite servers. Add `$HOST` (or a `.`-prefixed domain) to `server.allowedHosts` in both
+Vite configs if Vite rejects the `Host` header.
