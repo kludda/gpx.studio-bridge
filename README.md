@@ -115,22 +115,21 @@ storage and an ETag `version`.
 
 ## CORS "fix" (required)
 
-gpx.studio's backend services (`styles/tiles/fonts/sprites/graphhopper/overpass.gpx.studio`) only
-send CORS headers for the `https://gpx.studio` origin, so from any other origin the
-basemap/routing/elevation/POIs silently fail ("tools dead"). The fix is to fetch them
-**same-origin** — proxy them through the editor's own Vite dev server, so the browser never makes a
-cross-origin request and CORS simply never applies.
+gpx.studio's **routing** (`graphhopper`) and **POI** (`overpass`) services are fetch/XHR API calls
+that only send CORS headers for the `https://gpx.studio` origin, so from any other origin they
+silently fail ("tools dead"). The fix is to fetch them **same-origin** — proxy them through the
+editor's own Vite dev server, so the browser never makes a cross-origin request and CORS simply
+never applies. (`tiles`/`styles` — and the `fonts`/`sprites` they reference — load fine cross-origin,
+so they need no proxy and stay pointed at upstream `*.gpx.studio` in source.)
 
 ### Option A — Vite dev-server proxy (recommended; self-contained)
 
-The editor's `vite.config.ts` proxies each service under a relative path on its own origin, and
-`.env` points the `VITE_*_URL` vars at those paths:
+The editor's `vite.config.ts` proxies the two CORS-locked services under a relative path on its own
+origin, and `.env` points the `VITE_*_URL` vars at those paths:
 
 | service | proxy path (`vite.config.ts`) | env (`.env`) |
 | --- | --- | --- |
 | graphhopper | `/graphhopper` → `graphhopper.gpx.studio` | `VITE_GRAPHHOPPER_URL=/graphhopper` |
-| styles | `/styles` → `styles.gpx.studio` | `VITE_STYLES_URL=/styles` |
-| tiles | `/tiles` → `tiles.gpx.studio` | `VITE_TILES_URL=/tiles` |
 | overpass | `/overpass` → `overpass.gpx.studio` | `VITE_OVERPASS_URL=/overpass` |
 
 Because the fetch is same-origin, there's **no CORS, no preflight, and no mixed-content** to manage —
@@ -187,8 +186,6 @@ agnostic), and lock the embed origin to the bridge:
 
 ```ini
 VITE_GRAPHHOPPER_URL=/graphhopper
-VITE_STYLES_URL=/styles
-VITE_TILES_URL=/tiles
 VITE_OVERPASS_URL=/overpass
 # postMessage allowlist — the bridge's origin (unset = trust-on-first-use, POC default)
 VITE_EMBED_ALLOWED_ORIGINS=http://gpx.example.com
@@ -229,15 +226,12 @@ domain and all its subdomains:
 server: { /* … */ allowedHosts: ['.example.com'] }
 ```
 
-### Coverage caveat
+### Coverage
 
-The Vite proxy covers `graphhopper`, `tiles`, `styles`, `overpass` — **not** `fonts`/`sprites`, and
-the style JSON served from `styles.gpx.studio` still references `tiles`/`fonts`/`sprites` by their
-original absolute URLs internally. So basic functionality (routing, elevation, terrain, POIs, most
-basemaps) works, but **some map styles render imperfectly**. Fully fixing them means also proxying
-fonts/sprites and rewriting the URLs inside the style JSON — out of scope for this POC. (This caveat
-is identical whichever proxy does the work; it is a property of the upstream style JSON, not the
-proxy choice.)
+The Vite proxy covers only `graphhopper` and `overpass` — the two services that are CORS-locked to
+`https://gpx.studio`. `tiles`, `styles`, and the `fonts`/`sprites` referenced inside the style JSON
+load fine cross-origin, so they're fetched directly from upstream `*.gpx.studio` (unmodified source)
+and need no proxy. Routing, elevation, terrain, POIs, and basemaps all work as-is.
 
 ### TLS
 
