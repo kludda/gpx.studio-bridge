@@ -66,9 +66,48 @@ window.addEventListener('message', async (e) => {
   if (e.origin !== EDITOR_ORIGIN) return;
   const m = e.data || {};
   switch (m.event) {
-    case 'init':
+    case 'init': {
+      // The editor (re)announces its server-backed files (hostId + last-known
+      // version) on load. Re-hydrate the poll set and reconcile each against the
+      // server *now*, before the user can autosave a stale copy over a newer
+      // version — the reload race. Priming openIds/registry first means that even
+      // if the server list below fails, the regular poll revalidates on recovery.
+      const announced = Array.isArray(m.files) ? m.files : [];
+      for (const f of announced) {
+        openIds.add(f.id);
+        registry.set(f.id, { version: f.version });
+      }
       setStatus('editor ready');
+      let files;
+      try {
+        files = await api.listFiles();
+      } catch (err) {
+        setStatus(`editor ready — backend unreachable: ${err.message}`);
+        break; // openIds is primed; poll loop revalidates once the backend is back
+      }
+      const serverVersion = new Map(files.map((f) => [f.path, f.version]));
+      for (const f of announced) {
+        const current = serverVersion.get(f.id);
+        if (current === undefined) {
+          // Gone on the server while the editor was away → drop it editor-side.
+          postToEditor({ action: 'remove', id: f.id });
+          openIds.delete(f.id);
+          registry.delete(f.id);
+        } else if (current !== f.version) {
+          // Server moved on → push the newer copy down before any edit lands.
+          try {
+            const { data, version } = await api.getFile(f.id);
+            registry.set(f.id, { version });
+            postToEditor({ action: 'merge', id: f.id, data });
+          } catch { /* leave primed; the poll loop retries */ }
+        } else {
+          // Already current → confirm so the editor clears its "revalidating" badge.
+          postToEditor({ action: 'status', id: f.id, ok: true, version: current });
+        }
+      }
+      if (announced.length) setStatus(`revalidated ${announced.length} file(s)`);
       break;
+    }
 
     case 'load': // editor's ack of a finished load — informational
       break;

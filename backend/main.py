@@ -78,7 +78,12 @@ def _relpath(p: Path) -> str:
 
 
 def _version(p: Path) -> int:
-    return p.stat().st_mtime_ns
+    # Microsecond mtime (ns // 1000). Coarser than full st_mtime_ns but it stays
+    # under JS Number.MAX_SAFE_INTEGER (~9e15), so it round-trips through the
+    # shell's JSON without precision loss. That matters now that PUT enforces
+    # baseVersion: an ns value would round in JS and a rounded base would
+    # false-positive as a conflict on an otherwise-clean save.
+    return p.stat().st_mtime_ns // 1000
 
 
 # The editor writes the open file's display name to `<metadata><name>` (renaming
@@ -142,7 +147,12 @@ class SaveBody(BaseModel):
     data: str = Field(description="Raw GPX XML to write.")
     baseVersion: int | None = Field(
         default=None,
-        description="Version the edit was based on; accepted for echo bookkeeping but not enforced (last-write-wins).",
+        description=(
+            "Version the edit was based on. When provided, the write is rejected "
+            "with **409** if the file has since changed on the server (the edit "
+            "was based on a stale copy). Pass `null` to skip the check and force a "
+            "last-write-wins overwrite (e.g. a first save with no known base)."
+        ),
     )
 
 
@@ -218,15 +228,25 @@ def create_file(body: CreateBody) -> FileEntry:
 def save_file(body: SaveBody) -> FileEntry:
     """Save a file (autosave or explicit save).
 
-    Whole-file, **last-write-wins** overwrite of ``path`` with ``data`` (parent
-    folders created as needed). ``baseVersion`` is accepted for the shell's echo
-    bookkeeping but, by design, does **not** gate the write: a stale base still
-    succeeds. Returns the new ``{path, version}``. Same path validation (and
-    400s) as ``GET /file``.
+    Whole-file overwrite of ``path`` with ``data`` (parent folders created as
+    needed). If ``baseVersion`` is given and the file's current version differs,
+    the edit was based on a stale copy and is rejected with **409** rather than
+    clobbering the newer content — the guard against an out-of-date editor (e.g.
+    just after a browser reload) overwriting someone else's later save. A ``null``
+    ``baseVersion`` skips the check (last-write-wins). Returns the new
+    ``{path, version}``. Same path validation (and 400s) as ``GET /file``.
     """
     target = _resolve(body.path)
     rel = _relpath(target)
     with _locks[rel]:
+        if body.baseVersion is not None and target.exists():
+            current = _version(target)
+            if current != body.baseVersion:
+                raise HTTPException(
+                    409,
+                    f"version conflict: file changed on the server "
+                    f"(base {body.baseVersion}, current {current})",
+                )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(body.data, encoding="utf-8")
         return FileEntry(path=rel, version=_version(target))
