@@ -9,7 +9,9 @@ Run:  GPX_DATA_DIR=/path/to/scratch uvicorn main:app --reload --port 3001
 
 from __future__ import annotations
 
+import html
 import os
+import re
 import threading
 from collections import defaultdict
 from pathlib import Path
@@ -79,12 +81,49 @@ def _version(p: Path) -> int:
     return p.stat().st_mtime_ns
 
 
+# The editor writes the open file's display name to `<metadata><name>` (renaming
+# a file edits this, not the filename). Match the metadata block first, then the
+# `<name>` *within* it, so a block without a name doesn't fall through to a later
+# `<trk><name>`.
+_METADATA = re.compile(r"<metadata\b[^>]*>(.*?)</metadata>", re.DOTALL | re.IGNORECASE)
+_NAME = re.compile(r"<name\b[^>]*>(.*?)</name>", re.DOTALL | re.IGNORECASE)
+
+
+def _metadata_name(p: Path) -> str | None:
+    """Extract `<metadata><name>` for the Open popup's label, or None.
+
+    Reads only a bounded prefix (metadata sits at the top of a GPX file, before
+    the track points) so this stays cheap even for large files, and unescapes
+    XML entities so the raw display name is returned.
+    """
+    try:
+        with p.open("r", encoding="utf-8", errors="replace") as fh:
+            head = fh.read(65536)
+    except OSError:
+        return None
+    block = _METADATA.search(head)
+    if not block:
+        return None
+    m = _NAME.search(block.group(1))
+    if not m:
+        return None
+    name = html.unescape(m.group(1)).strip()
+    return name or None
+
+
 # --------------------------------------------------------------------------- #
 # Models
 # --------------------------------------------------------------------------- #
 class FileEntry(BaseModel):
     path: str = Field(description="File id: path relative to the data root, e.g. `trips/day1.gpx`.")
     version: int = Field(description="Opaque version token (`st_mtime_ns`); compared by the poll loop.")
+    name: str | None = Field(
+        default=None,
+        description=(
+            "The file's `<metadata><name>` (the editor's display name), or null if "
+            "absent. Only populated when listed with `?with_name=1`."
+        ),
+    )
 
 
 class FileContent(BaseModel):
@@ -111,19 +150,29 @@ class SaveBody(BaseModel):
 # Routes
 # --------------------------------------------------------------------------- #
 @app.get("/files", response_model=list[FileEntry])
-def list_files() -> list[FileEntry]:
+def list_files(
+    with_name: bool = Query(
+        False,
+        description=(
+            "Also read each file's `<metadata><name>` into `name`. The Open popup "
+            "sets this; the 2s poll loop leaves it off to avoid reading every file."
+        ),
+    ),
+) -> list[FileEntry]:
     """List every file in the store.
 
     Walks the data directory recursively and returns one ``{path, version}``
     entry per ``.gpx`` file, sorted by path. ``path`` is the file id (its path
-    relative to the data root); ``version`` is ``st_mtime_ns``. Drives the
-    shell's Open popup and the poll loop that detects out-of-band changes for
-    last-write-wins collaboration.
+    relative to the data root); ``version`` is ``st_mtime_ns``. With
+    ``?with_name=1`` each entry also carries the file's ``<metadata><name>`` in
+    ``name`` (for the Open popup's label). Drives the shell's Open popup and the
+    poll loop that detects out-of-band changes for last-write-wins collaboration.
     """
     out: list[FileEntry] = []
     for p in sorted(DATA_DIR.rglob("*.gpx")):
         if p.is_file():
-            out.append(FileEntry(path=_relpath(p), version=_version(p)))
+            name = _metadata_name(p) if with_name else None
+            out.append(FileEntry(path=_relpath(p), version=_version(p), name=name))
     return out
 
 

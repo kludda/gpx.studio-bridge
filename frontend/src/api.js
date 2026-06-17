@@ -12,9 +12,10 @@ async function json(res) {
 }
 
 export const api = {
-  // → [{ path, version }]
-  listFiles() {
-    return fetch(`${API_BASE}/files`).then(json);
+  // → [{ path, version, name? }]  (name = <metadata><name>, only with withName)
+  listFiles(withName = false) {
+    const qs = withName ? '?with_name=1' : '';
+    return fetch(`${API_BASE}/files${qs}`).then(json);
   },
   // → { path, version, data }
   getFile(path) {

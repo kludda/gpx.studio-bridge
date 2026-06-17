@@ -1,5 +1,12 @@
+import '@fontsource-variable/inter'; // same font the editor uses (Inter Variable)
+import { createIcons, CloudDownload } from 'lucide';
 import { api } from './api.js';
 import { createPoller } from './poll.js';
+
+// Swap any <i data-lucide="…"> in the static markup for inline SVGs. Only the
+// icons listed here are bundled (tree-shaken); re-call after injecting new
+// data-lucide markup dynamically.
+createIcons({ icons: { CloudDownload } });
 
 const POLL_MS = Number(import.meta.env.VITE_POLL_MS) || 2000;
 
@@ -36,14 +43,16 @@ poller.start();
 // Open a server file into the editor.
 // --------------------------------------------------------------------------- //
 async function openFile(path) {
-  if (openIds.has(path)) { closePopup(); return; }
+  // Re-opening an already-open file is safe: the editor reuses the existing
+  // localId↔hostId binding (no duplicate) and applies a whole-file LWW replace —
+  // same as a poll `merge`, plus it re-focuses the file. So no open-guard here;
+  // clicking an open file just re-syncs it from the server and brings it forward.
   try {
     const { data, version } = await api.getFile(path);
     registry.set(path, { version });
     openIds.add(path);
     postToEditor({ action: 'load', id: path, data, title: path.split('/').pop(), autosave: 1 });
     setStatus(`opened ${path}`);
-    renderTreeOpenState();
     closePopup();
   } catch (err) {
     setStatus(`open failed: ${err.message}`);
@@ -88,7 +97,6 @@ window.addEventListener('message', async (e) => {
           postToEditor({ action: 'status', tempId: m.tempId, id: path, ok: true, version });
           setStatus(`created ${path}`);
         }
-        renderTreeOpenState();
       } catch (err) {
         // tempId set on a create failure, id set on an update failure — send whichever we have.
         postToEditor({ action: 'status', tempId: m.tempId, id: m.id, ok: false, message: err.message });
@@ -119,7 +127,7 @@ document.addEventListener('click', (e) => {
 
 async function refreshTree() {
   try {
-    lastFiles = await api.listFiles();
+    lastFiles = await api.listFiles(true); // with_name → show <metadata><name> in labels
     renderTree(lastFiles);
   } catch (err) {
     treeEl.innerHTML = `<div class="empty">list failed: ${err.message}</div>`;
@@ -149,9 +157,14 @@ function renderNode(node, prefix) {
     if (child.__file) {
       const f = child.__file;
       const row = document.createElement('div');
-      row.className = 'file' + (openIds.has(f.path) ? ' open' : '');
+      row.className = 'file';
       row.dataset.path = f.path;
-      row.innerHTML = `<span>${name}</span><span class="badge">${openIds.has(f.path) ? 'open' : ''}</span>`;
+      // Label: "<metadata name> — <filename>" when the file carries a metadata
+      // name (the editor's display name), else just the filename.
+      const label = f.name
+        ? `${esc(f.name)} <span class="dim">— ${esc(name)}</span>`
+        : esc(name);
+      row.innerHTML = `<span>${label}</span>`;
       row.addEventListener('click', () => openFile(f.path));
       els.push(row);
     } else {
@@ -164,11 +177,13 @@ function renderNode(node, prefix) {
   return els;
 }
 
+// Escape text before it goes into innerHTML — metadata names are arbitrary
+// user-entered strings and must not break (or inject) markup.
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
 function folderFirst([an, av], [bn, bv]) {
   const af = av.__file ? 1 : 0, bf = bv.__file ? 1 : 0;
   return af - bf || an.localeCompare(bn);
-}
-
-function renderTreeOpenState() {
-  if (!popup.hidden) renderTree(lastFiles);
 }
