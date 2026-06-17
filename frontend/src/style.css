@@ -18,6 +18,7 @@ body { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
 /* match the editor's menu icons (lucide size="16") */
 .menu-btn svg { width: 16px; height: 16px; }
 .menu-btn:hover { background: #4a5a6a; }
+.menu-btn.icon-only { padding: 5px 7px; }
 .status { margin-left: auto; font-size: 12px; color: #9fb3c8; }
 
 .popup {
@@ -39,5 +40,11 @@ body { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
 .tree .file:hover { background: #eef3f8; }
 .tree .file .dim { color: #999; font-weight: 400; }
 .tree .empty { padding: 10px; color: #999; }
+.tree .poll-row {
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 3px 8px; border-radius: 4px;
+}
+.tree .poll-row .ver { color: #999; font-variant-numeric: tabular-nums; font-size: 11px; }
+.dim { color: #999; font-weight: 400; }
 
 .editor { border: 0; width: 100%; height: 100%; }

@@ -8,7 +8,7 @@
 // Echo avoidance: after our own autosave/promotion we adopt the version returned
 // by our PUT/POST into the registry, so our own write reads as "unchanged" here.
 
-export function createPoller({ api, registry, openIds, postToEditor, intervalMs, setStatus }) {
+export function createPoller({ api, registry, openIds, postToEditor, intervalMs, setStatus, onTick }) {
   let timer = null;
   let inFlight = false;
   let failures = 0; // consecutive listFiles() failures → drives the disconnected status
@@ -66,6 +66,7 @@ export function createPoller({ api, registry, openIds, postToEditor, intervalMs,
       }
     } finally {
       inFlight = false;
+      onTick?.(); // let the UI reflect the current poll set (dev polling popup)
     }
   }
 

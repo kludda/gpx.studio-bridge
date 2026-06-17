@@ -1,12 +1,12 @@
 import '@fontsource-variable/inter'; // same font the editor uses (Inter Variable)
-import { createIcons, CloudDownload } from 'lucide';
+import { createIcons, CloudDownload, Activity } from 'lucide';
 import { api } from './api.js';
 import { createPoller } from './poll.js';
 
 // Swap any <i data-lucide="…"> in the static markup for inline SVGs. Only the
 // icons listed here are bundled (tree-shaken); re-call after injecting new
 // data-lucide markup dynamically.
-createIcons({ icons: { CloudDownload } });
+createIcons({ icons: { CloudDownload, Activity } });
 
 const POLL_MS = Number(import.meta.env.VITE_POLL_MS) || 2000;
 
@@ -36,7 +36,12 @@ const statusEl = document.getElementById('status');
 function setStatus(text) { statusEl.textContent = text; }
 
 // Collaboration: poll the server for changes to open files → merge.
-const poller = createPoller({ api, registry, openIds, postToEditor, intervalMs: POLL_MS, setStatus });
+// onTick keeps the polling popup live: the poll set changes as files open,
+// close, or get merged, so re-render whenever it's visible.
+const poller = createPoller({
+  api, registry, openIds, postToEditor, intervalMs: POLL_MS, setStatus,
+  onTick: () => { if (!pollPopup.hidden) renderPollList(); },
+});
 poller.start();
 
 // --------------------------------------------------------------------------- //
@@ -225,4 +230,36 @@ function esc(s) {
 function folderFirst([an, av], [bn, bv]) {
   const af = av.__file ? 1 : 0, bf = bv.__file ? 1 : 0;
   return af - bf || an.localeCompare(bn);
+}
+
+// --------------------------------------------------------------------------- //
+// Polling popup — dev view of the files the poll loop is currently watching
+// (the `openIds` set). Re-rendered live from onTick while open.
+// --------------------------------------------------------------------------- //
+const pollBtn = document.getElementById('pollBtn');
+const pollPopup = document.getElementById('pollPopup');
+const pollList = document.getElementById('pollList');
+const pollMeta = document.getElementById('pollMeta');
+
+pollBtn.addEventListener('click', () => {
+  if (pollPopup.hidden) { pollPopup.hidden = false; renderPollList(); }
+  else pollPopup.hidden = true;
+});
+document.addEventListener('click', (e) => {
+  if (!pollPopup.hidden && !pollPopup.contains(e.target) && e.target !== pollBtn && !pollBtn.contains(e.target)) {
+    pollPopup.hidden = true;
+  }
+});
+
+function renderPollList() {
+  const paths = [...openIds].sort((a, b) => a.localeCompare(b));
+  pollMeta.textContent = `· every ${POLL_MS}ms · ${paths.length} file(s)`;
+  if (!paths.length) {
+    pollList.innerHTML = '<div class="empty">no files open — nothing polled</div>';
+    return;
+  }
+  pollList.innerHTML = paths.map((p) => {
+    const v = registry.get(p)?.version;
+    return `<div class="poll-row"><span>${esc(p)}</span><span class="ver">v ${v ?? '?'}</span></div>`;
+  }).join('');
 }
