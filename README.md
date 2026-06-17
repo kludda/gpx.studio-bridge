@@ -50,14 +50,50 @@ promotion — is documented with the editor, in
 **host** half: `frontend/src/main.js` handles inbound `event`s over the FastAPI folder store
 (`backend/`).
 
-### Collaboration (last-write-wins, poll-based — no websocket)
+### Collaboration (poll-based, no websocket)
 
-The host polls `GET /files` every `VITE_POLL_MS`. When an **open** file's `version` is newer than the
-registry's, it `GET /file`s the bytes and pushes `{action:'merge', id, data}`. Local edits flow the
-other way as `autosave` → `PUT /file` → `{action:'status', id, ok:true, version}`; the host adopts its own
-write's version so it doesn't immediately re-`merge` its own change. Whole-file replace throughout —
-deliberately simple. A real platform host (OpenCloud/Nextcloud) is the same protocol with WebDAV
-storage and an ETag `version`.
+Storage, identity and versioning are the host's. `version` is the file's **mtime in microseconds**
+(`st_mtime_ns // 1000`) — coarser than nanoseconds but under JS's `Number.MAX_SAFE_INTEGER`, so it
+round-trips through the shell's JSON intact (a raw `st_mtime_ns` would round in JS and break the
+conflict check below). The host keeps a `registry` (`hostId → version`) and an `openIds` set of files
+currently framed in the editor; **only open files are synced.**
+
+**Steady-state poll.** Every `VITE_POLL_MS` the host `GET /files` and, per open file, compares the
+server `version` to the registry. Newer on the server → `GET /file` → `{action:'merge', id, data}`
+(whole-file replace). Gone → `{action:'remove', id}`. The same loop doubles as the connectivity
+heartbeat (see **Connection loss** below).
+
+**Local edits + echo avoidance.** `autosave` → `PUT /file` with `baseVersion` = the registry's
+version → `{action:'status', id, ok:true, version}`. The host **adopts its own write's version** into
+the registry, so the next poll reads "unchanged" and doesn't bounce the edit back as a `merge`.
+
+**Reload reconciliation.** `openIds` is in-memory, so after a shell/editor reload it's empty and the
+editor's restored (Dexie) copies may be behind the server. Without reconciliation a first edit would
+`autosave` a stale copy *over* a newer server version. So on `{event:'init'}` the editor re-announces
+its server-backed files (`[{id, version}]`); the host primes `openIds`/registry from them and
+immediately reconciles each against the server — **newer → merge down, in-sync → status confirm,
+deleted → remove** — *before* the user can edit. Restored files show a "revalidating" badge until
+that reply lands (not a falsely-confident "Saved"). Priming `openIds` first means the regular poll
+still revalidates on recovery even if that initial list call fails.
+
+**Conflict detection.** `PUT` enforces `baseVersion`: if the file changed on the server since the
+base the edit was built on, the write is **rejected with 409** instead of clobbering the newer
+content. So when two sessions edit concurrently, the **first to reach the server wins**; the loser's
+`autosave` 409s (red badge + error toast) and its next poll merges the winner's version down — the
+losing edit is **discarded** (whole-file LWW, no field-level merge). `baseVersion: null` skips the
+check (a first/forced save). This is the one deliberate departure from pure last-write-wins, traded
+for not silently losing an already-committed save.
+
+**Connection loss.** If the backend (or an auth gateway in front of it — e.g. an expired Cloudflare
+tunnel) becomes unreachable, the poll's `GET /files` fails: the shell shows `⚠ disconnected (N failed
+polls)` and re-sends a **global notice every tick** — `{action:'status', ok:false, message}` with
+**no `id`** — which the editor renders as one sticky toast ("Connection lost, please reload browser")
+that auto-clears on recovery. The `frontend/src/api.js` client treats redirected, non-JSON, and
+network-error responses as failures (and validates the response shape), so a save attempted while
+down fails loudly instead of masquerading as saved.
+
+Whole-file replace throughout — deliberately simple. A real platform host (OpenCloud/Nextcloud) is
+the same protocol with WebDAV storage and an ETag `version`.
 
 ## CORS (gpx.studio services)
 
