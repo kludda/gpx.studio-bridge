@@ -11,6 +11,7 @@
 export function createPoller({ api, registry, openIds, postToEditor, intervalMs, setStatus }) {
   let timer = null;
   let inFlight = false;
+  let failures = 0; // consecutive listFiles() failures → drives the disconnected status
 
   async function tick() {
     if (inFlight) return; // don't stack ticks if a poll is slow
@@ -19,8 +20,25 @@ export function createPoller({ api, registry, openIds, postToEditor, intervalMs,
       let files;
       try {
         files = await api.listFiles();
-      } catch {
-        return; // transient backend hiccup; try again next tick
+      } catch (err) {
+        // The poll hits the backend every tick even with nothing open, so it's
+        // our connectivity heartbeat. Don't swallow failures: an outage (backend
+        // down, or an expired auth gateway bouncing us with a CORS error) is
+        // otherwise invisible until a save happens to fail.
+        failures++;
+        const note = failures > 1 ? ` (${failures} failed polls)` : '';
+        setStatus?.(`⚠ disconnected — ${err.message}${note}`);
+        // Re-sent every tick (not edge-triggered): a lost backend connection is
+        // severe and requires the user to act, so keep reporting it until it
+        // recovers. Reuse the per-file `status` channel with no `id`; the editor
+        // treats an id-less status as a global host notice and renders it as one
+        // sticky, de-duplicated toast (so this doesn't stack a toast every tick).
+        postToEditor?.({ action: 'status', ok: false, message: 'Connection lost, please reload browser' });
+        return; // retry next tick
+      }
+      if (failures > 0) {
+        failures = 0; // recovered
+        setStatus?.('reconnected');
       }
       const serverVersion = new Map(files.map((f) => [f.path, f.version]));
 
