@@ -12,7 +12,7 @@ the architecture, the poll-based collaboration design, CORS, and reverse-proxy s
 ## Branches & commits
 - `dev` — **default working branch**; commit at will, push often (remote backup).
 - `main` — tidy; **only squashed large commits, and only when explicitly asked.**
-- Commit from this repo (`git -C gpx.studio-bridge …`); never `git` at the workspace root.
+- Keep bridge changes in their own commits, separate from the editor.
 
 ## Invariants (never violate — see `README.md` for the why)
 - The host owns **storage, identity and versioning**; the editor owns no files.
