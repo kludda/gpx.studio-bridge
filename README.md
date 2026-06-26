@@ -104,10 +104,6 @@ See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config an
 
 ### Matching env
 
-**Editor** (`gpx.studio/website/.env`) — relative service paths + the postMessage allowlist; see
-[`../gpx.studio/README-EMBEDDED.md`](../gpx.studio/README-EMBEDDED.md) (set
-`VITE_EMBED_ALLOWED_ORIGINS` to this shell's origin, e.g. `http://gpx.example.com`).
-
 **Bridge shell** (`frontend/.env`) — backend is same-origin via the Vite `/api` proxy, editor is its
 own host:
 
