@@ -11,12 +11,11 @@ last-write-wins via polling.
 ## Run
 
 The bridge is two processes — the **backend** store and the **frontend** shell. The commands below
-bind to all interfaces so other machines on the LAN can reach the shell; for a single-machine run set
-`HOST=localhost` and drop `--host`. The backend stays on `localhost` — only the shell's Vite `/api`
-proxy reaches it, server-side.
+bind to all interfaces (`--host`) so other machines on the LAN can reach the shell. The backend stays
+on `localhost` — only the shell's Vite `/api` proxy reaches it, server-side.
 
 ```bash
-HOST=192.168.1.50    # this machine's LAN IP (e.g. `hostname -I`); use localhost for a local-only run
+HOST=192.168.1.50    # this machine's LAN IP (e.g. `hostname -I`)
 
 # 1. Backend — folder store on :3001 (interactive API docs at /api/docs and /api/redoc)
 cd backend
@@ -27,7 +26,8 @@ cp .env.example .env                                                # first time
 # 2. Frontend shell — :5174, point the iframe at $HOST's editor
 cd ../frontend
 npm install                                                         # first time
-VITE_API_BASE=/api VITE_EDITOR_URL=http://$HOST:5180/app?embedded=1 npm run dev -- --host
+cp .env.example .env                                                # first time; set VITE_API_BASE=/api and VITE_EDITOR_URL=http://$HOST:5180/app?embedded=1
+npm run dev -- --host
 ```
 
 Run the **editor** (the gpx.studio fork, `embedded-dev`) separately, with `--host` — see
