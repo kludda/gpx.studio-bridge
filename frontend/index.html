@@ -19,17 +19,14 @@
         <div id="fileTree" class="tree"></div>
       </div>
     </div>
-    <div class="menu">
-      <button id="mapsBtn" class="menu-btn"><i data-lucide="map-pin"></i> Maps link…</button>
+    <div class="menu maps-menu">
+      <input id="mapsInput" class="maps-field" type="text" placeholder="Paste Google Maps link here" />
+      <button id="convertBtn" class="menu-btn">Convert</button>
       <div id="mapsPopup" class="popup" hidden>
         <div class="popup-head">
           <span>Google Maps → waypoint</span>
         </div>
-        <div class="maps-body">
-          <textarea id="mapsInput" placeholder="Paste a Google Maps link (or share text)…" rows="3"></textarea>
-          <button id="convertBtn" class="menu-btn">Convert</button>
-          <pre id="mapsResult" class="maps-result"></pre>
-        </div>
+        <pre id="mapsResult" class="maps-result"></pre>
       </div>
     </div>
     <div class="menu">
