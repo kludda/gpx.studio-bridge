@@ -1,0 +1,41 @@
+# Caddyfile.example — reverse proxy for the gpx.studio embed POC.
+#
+# Routes the TWO app domains to their Vite dev servers. The bridge backend
+# is proxied *inside* Vite (the shell's /api → :3001), so this proxy is just
+# two dumb routes — no /api or service hops to configure here.
+#
+# Setup: replace <server-ip> with the machine running the dev servers
+# (e.g. `hostname -I`) and example.com with your domain.
+
+# --- Editor: whole domain to itself, so its root-relative assets
+#     (/_app, /@vite, …) resolve cleanly with no path mangling ---
+http://gpxstudio.example.com {
+	reverse_proxy <server-ip>:5180
+}
+
+# --- Bridge shell: serves the host UI and proxies /api → backend
+#     internally via Vite ---
+http://gpx.example.com {
+	reverse_proxy <server-ip>:5174
+}
+
+# --- TLS ---
+# The http:// prefixes above make Caddy serve plain HTTP. For HTTPS, drop
+# the http:// scheme from the site addresses and Caddy auto-provisions
+# Let's Encrypt certs (needs ports 80/443 reachable).
+#
+# For a wildcard cert, or when port 80 is closed, use the DNS challenge.
+# Example with the Cloudflare plugin (must be compiled into your Caddy
+# binary — check with `caddy list-modules | grep cloudflare`):
+#
+#   (tls) {
+#   	tls {
+#   		dns cloudflare {env.CF_API_TOKEN}
+#   		resolvers 1.1.1.1
+#   	}
+#   }
+#   # then `import tls` inside each site block above
+#
+# When switching to HTTPS, also flip the origin-bearing env vars
+# (VITE_EDITOR_URL, VITE_EMBED_ALLOWED_ORIGINS) to https://. The relative
+# VITE_*_URL service paths are scheme-agnostic and need no change.

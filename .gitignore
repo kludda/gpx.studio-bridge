@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# bridge scratch GPX store (GPX_DATA_DIR)
+gpx-data/
+
+# Node / Vite (bridge frontend)
+node_modules/
+dist/
+.env
+.env.local
+*.local

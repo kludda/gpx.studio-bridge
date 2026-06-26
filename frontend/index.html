@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Tracks</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <strong class="brand">My Tracks</strong>
+    <div class="menu">
+      <button id="openBtn" class="menu-btn"><i data-lucide="cloud-download"></i> Open from server…</button>
+      <div id="openPopup" class="popup" hidden>
+        <div class="popup-head">
+          <span>Server files</span>
+          <button id="refreshBtn" title="Reload list">⟳</button>
+        </div>
+        <div id="fileTree" class="tree"></div>
+      </div>
+    </div>
+    <div class="menu">
+      <button id="pollBtn" class="menu-btn icon-only" title="Polling status (dev)"><i data-lucide="activity"></i></button>
+      <div id="pollPopup" class="popup" hidden>
+        <div class="popup-head">
+          <span>Polling <span id="pollMeta" class="dim"></span></span>
+        </div>
+        <div id="pollList" class="tree"></div>
+      </div>
+    </div>
+    <span id="status" class="status"></span>
+  </div>
+
+  <iframe id="editor" class="editor" title="editor"></iframe>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
