@@ -265,14 +265,23 @@ function renderPollList() {
 }
 
 // --------------------------------------------------------------------------- //
-// Maps link field — an inline box in the top bar; Convert posts the link to the
-// backend's /convert endpoint and drops the resulting GPX <wpt> into a popup
-// below (no editor integration yet).
+// Maps link field — an inline box in the top bar. Convert posts the link to the
+// backend's /convert endpoint and drops the resulting GPX <wpt> into a popup.
+// "Add to file" then splices that <wpt> into an open file (the server stays the
+// source of truth): GET the target, insert the wpt, PUT it back, and push a
+// `merge` to the editor — reusing the existing open-file API + collaboration
+// path. The host can't know which file is *selected* in the editor (selection
+// never crosses postMessage), so the user picks from the open files (`openIds`).
 // --------------------------------------------------------------------------- //
 const mapsPopup = document.getElementById('mapsPopup');
 const mapsInput = document.getElementById('mapsInput');
 const convertBtn = document.getElementById('convertBtn');
 const mapsResult = document.getElementById('mapsResult');
+const mapsAdd = document.getElementById('mapsAdd');
+const mapsTarget = document.getElementById('mapsTarget');
+const addWptBtn = document.getElementById('addWptBtn');
+
+let lastConvert = null; // {lat, lng, name, gpx} from the most recent successful convert
 
 // Dismiss the result popup on an outside click (but not when clicking the field
 // or Convert — those drive it).
@@ -283,16 +292,102 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Reflect the current open-file set into the "Add to file" controls.
+//   0 open → no picker; the button opens the pin as a new file.
+//   1 open → no picker (preselected); the button names that file.
+//  ≥2 open → a <select> of the open paths.
+function renderAddTarget() {
+  if (!lastConvert) { mapsAdd.hidden = true; return; }
+  const paths = [...openIds].sort((a, b) => a.localeCompare(b));
+  mapsAdd.hidden = false;
+  if (paths.length >= 2) {
+    mapsTarget.hidden = false;
+    mapsTarget.innerHTML = paths.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+    addWptBtn.textContent = 'Add to file';
+  } else {
+    mapsTarget.hidden = true;
+    mapsTarget.innerHTML = paths.length ? `<option value="${esc(paths[0])}">${esc(paths[0])}</option>` : '';
+    addWptBtn.textContent = paths.length ? `Add to ${paths[0]}` : 'Add as new file';
+  }
+}
+
+// Pull the single <wpt>…</wpt> block out of the converter's standalone GPX. Safe
+// because that document is built by maps_convert.py's _build_wpt (format we own).
+function extractWpt(gpx) {
+  return gpx.match(/<wpt[\s\S]*?<\/wpt>/)?.[0] ?? null;
+}
+
+// Splice a <wpt> into an existing GPX. GPX 1.1 orders children metadata, wpt*,
+// rte*, trk* — so insert *before the first rte/trk* (else before </gpx>) to keep
+// the file schema-valid rather than appending the waypoint after the tracks.
+function insertWpt(gpx, wpt) {
+  const at = gpx.search(/<(rte|trk)[\s>]/);
+  const pos = at !== -1 ? at : gpx.lastIndexOf('</gpx>');
+  if (pos === -1) return gpx; // not a GPX document we recognise — leave untouched
+  // Back up over the anchor's own-line indentation so the inserted <wpt> adopts
+  // it (and the anchor keeps it), rather than landing flush-left.
+  let start = pos;
+  while (start > 0 && (gpx[start - 1] === ' ' || gpx[start - 1] === '\t')) start--;
+  const indent = gpx.slice(start, pos);
+  return gpx.slice(0, start) + `${indent}${wpt}\n${indent}` + gpx.slice(pos);
+}
+
+async function addWptToFile() {
+  if (!lastConvert) return;
+  const wpt = extractWpt(lastConvert.gpx);
+  if (!wpt) { setStatus('add failed: no <wpt> in converted GPX'); return; }
+  const path = mapsTarget.value || null; // null when no file is open
+
+  addWptBtn.disabled = true;
+  try {
+    if (!path) {
+      // No open file → create the pin as a real server file *first*, then load it
+      // by that id. A `load` must always carry a hostId: the editor's load handler
+      // registers the file as server-backed, so an id-less load would bind it to
+      // `hostId: undefined` — which the editor drops on reload (demoting it to a
+      // browser-local file) and which routes its autosaves into the host's
+      // promotion branch (spawning stray files). Creating on the server up front
+      // gives a proper, syncing file that also appears in the picker next time.
+      const base = (lastConvert.name || 'Google Maps Pin').replace(/[\\/]+/g, '-');
+      const { path: newPath, version } = await api.createFile(`${base}.gpx`, lastConvert.gpx);
+      registry.set(newPath, { version });
+      openIds.add(newPath);
+      postToEditor({ action: 'load', id: newPath, data: lastConvert.gpx, title: newPath.split('/').pop() });
+      setStatus(`created ${newPath}`);
+      mapsPopup.hidden = true;
+      return;
+    }
+    const { data, version } = await api.getFile(path);
+    const merged = insertWpt(data, wpt);
+    const { version: newVersion } = await api.putFile(path, merged, version);
+    registry.set(path, { version: newVersion }); // adopt our own write → poll won't echo it back as a merge
+    openIds.add(path);
+    postToEditor({ action: 'merge', id: path, data: merged });
+    setStatus(`added waypoint to ${path}`);
+    mapsPopup.hidden = true;
+  } catch (err) {
+    // 409 here means someone wrote between our GET and PUT; the poll loop will
+    // merge their copy, after which the user can retry the add.
+    setStatus(`add failed: ${err.message}`);
+  } finally {
+    addWptBtn.disabled = false;
+  }
+}
+
 async function convertMaps() {
   const input = mapsInput.value.trim();
   if (!input) return;
   convertBtn.disabled = true;
   mapsResult.textContent = 'converting…';
+  mapsAdd.hidden = true;
+  lastConvert = null;
   mapsPopup.hidden = false;
   try {
-    const { lat, lng, name, gpx } = await api.convertMapsLink(input);
-    mapsResult.textContent = `${name || '(no name)'} — ${lat}, ${lng}\n\n${gpx}`;
-    setStatus(`converted: ${lat}, ${lng}`);
+    const res = await api.convertMapsLink(input);
+    lastConvert = res;
+    mapsResult.textContent = `${res.name || '(no name)'} — ${res.lat}, ${res.lng}\n\n${res.gpx}`;
+    renderAddTarget();
+    setStatus(`converted: ${res.lat}, ${res.lng}`);
   } catch (err) {
     mapsResult.textContent = `convert failed: ${err.message}`;
     setStatus(`convert failed: ${err.message}`);
@@ -302,6 +397,7 @@ async function convertMaps() {
 }
 
 convertBtn.addEventListener('click', convertMaps);
+addWptBtn.addEventListener('click', addWptToFile);
 mapsInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); convertMaps(); }
 });
