@@ -1,12 +1,12 @@
 import '@fontsource-variable/inter'; // same font the editor uses (Inter Variable)
-import { createIcons, CloudDownload, Activity } from 'lucide';
+import { createIcons, CloudDownload, Activity, MapPin } from 'lucide';
 import { api } from './api.js';
 import { createPoller } from './poll.js';
 
 // Swap any <i data-lucide="…"> in the static markup for inline SVGs. Only the
 // icons listed here are bundled (tree-shaken); re-call after injecting new
 // data-lucide markup dynamically.
-createIcons({ icons: { CloudDownload, Activity } });
+createIcons({ icons: { CloudDownload, Activity, MapPin } });
 
 const POLL_MS = Number(import.meta.env.VITE_POLL_MS) || 2000;
 
@@ -263,3 +263,46 @@ function renderPollList() {
     return `<div class="poll-row"><span>${esc(p)}</span><span class="ver">v ${v ?? '?'}</span></div>`;
   }).join('');
 }
+
+// --------------------------------------------------------------------------- //
+// Maps popup — paste a Google Maps link, get a GPX <wpt> back from the backend's
+// /convert endpoint and show it (no editor integration yet).
+// --------------------------------------------------------------------------- //
+const mapsBtn = document.getElementById('mapsBtn');
+const mapsPopup = document.getElementById('mapsPopup');
+const mapsInput = document.getElementById('mapsInput');
+const convertBtn = document.getElementById('convertBtn');
+const mapsResult = document.getElementById('mapsResult');
+
+mapsBtn.addEventListener('click', () => {
+  if (mapsPopup.hidden) { mapsPopup.hidden = false; mapsInput.focus(); }
+  else mapsPopup.hidden = true;
+});
+document.addEventListener('click', (e) => {
+  if (!mapsPopup.hidden && !mapsPopup.contains(e.target) && e.target !== mapsBtn && !mapsBtn.contains(e.target)) {
+    mapsPopup.hidden = true;
+  }
+});
+
+async function convertMaps() {
+  const input = mapsInput.value.trim();
+  if (!input) return;
+  convertBtn.disabled = true;
+  mapsResult.textContent = 'converting…';
+  try {
+    const { lat, lng, name, gpx } = await api.convertMapsLink(input);
+    mapsResult.textContent = `${name || '(no name)'} — ${lat}, ${lng}\n\n${gpx}`;
+    setStatus(`converted: ${lat}, ${lng}`);
+  } catch (err) {
+    mapsResult.textContent = `convert failed: ${err.message}`;
+    setStatus(`convert failed: ${err.message}`);
+  } finally {
+    convertBtn.disabled = false;
+  }
+}
+
+convertBtn.addEventListener('click', convertMaps);
+// Enter converts; Shift+Enter keeps a newline (share text can be multi-line).
+mapsInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); convertMaps(); }
+});

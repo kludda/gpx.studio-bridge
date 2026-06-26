@@ -20,6 +20,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from maps_convert import router as maps_router
+
 DATA_DIR = Path(os.environ.get("GPX_DATA_DIR", "./gpx-data")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -50,6 +52,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Standalone Google Maps link → GPX waypoint utility (owns no files); see maps_convert.py.
+app.include_router(maps_router)
 
 # Per-path write locks so concurrent PUT/POST on the same file serialize.
 _locks: dict[str, threading.Lock] = defaultdict(threading.Lock)

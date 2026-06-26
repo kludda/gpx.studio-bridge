@@ -88,4 +88,14 @@ export const api = {
     expect(Number.isFinite(res?.version), 'missing version');
     return res;
   },
+  // Google Maps link/share-text → { lat, lng, name, source, gpx }
+  async convertMapsLink(input) {
+    const res = await request(`${API_BASE}/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input }),
+    });
+    expect(typeof res?.gpx === 'string' && Number.isFinite(res?.lat), 'missing gpx/lat');
+    return res;
+  },
 };
