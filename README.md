@@ -104,33 +104,15 @@ analogous thing for its own store: `frontend/vite.config.js` proxies `/api` → 
 calls the backend same-origin. Because both are handled inside Vite, the external reverse proxy below
 only has to route the two app domains.
 
-## Reverse proxy (two app domains)
+## Reverse proxy
 
-To run the app over real hostnames in any browser (no flags), put a reverse proxy in front that
-routes the **two app domains** to their dev servers. The gpx.studio services and the bridge backend
-are proxied *inside* Vite now (see [CORS](#cors-gpxstudio-services) above), so the external proxy is
-just two dumb routes:
+To serve the app over real hostnames in any browser (no flags), put a reverse proxy in front routing
+the **two app domains** — `gpxstudio.example.com` → the editor (`:5180`) and `gpx.example.com` → the
+bridge shell (`:5174`) — to their Vite dev servers. The gpx.studio services and the bridge backend
+are proxied *inside* Vite (see [CORS](#cors-gpxstudio-services) above), so the external proxy is just
+those two routes. Plain HTTP by default; HTTPS (incl. the DNS challenge) is a one-line change.
 
-- **`gpxstudio.example.com`** → the editor (`:5180`). Whole domain to itself so its root-relative
-  `/_app`, `/@vite` … assets resolve cleanly with no path mangling.
-- **`gpx.example.com`** → the bridge shell (`:5174`), which serves the host UI and proxies `/api` to
-  the FastAPI backend itself.
-
-```caddy
-# --- Editor: whole domain to itself, so root-relative assets just work ---
-http://gpxstudio.example.com {
-	reverse_proxy <server-ip>:5180
-}
-
-# --- Bridge shell (proxies /api → backend internally via Vite) ---
-http://gpx.example.com {
-	reverse_proxy <server-ip>:5174
-}
-```
-
-Replace `<server-ip>` with the machine running the dev servers (e.g. `hostname -I`), and
-`example.com` with your domain. The blocks use `http://` so Caddy serves plain HTTP; drop the scheme
-(or use `https://`) to get automatic certificates — see the TLS note at the end.
+See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config and TLS notes.
 
 ### Matching env
 
@@ -172,23 +154,3 @@ leading-dot wildcard covers a domain and all its subdomains:
 ```js
 server: { /* … */ allowedHosts: ['.example.com'] }
 ```
-
-### TLS
-
-To serve over HTTPS, drop the `http://` scheme from the site addresses and Caddy auto-provisions
-Let's Encrypt certs (needs ports 80/443 reachable). For a wildcard or when port 80 is closed, use the
-DNS challenge, e.g. with the Cloudflare plugin:
-
-```caddy
-(tls) {
-	tls {
-		dns cloudflare {env.CF_API_TOKEN}
-		resolvers 1.1.1.1
-	}
-}
-# then `import tls` inside each site block
-```
-
-(The DNS plugin must be compiled into your Caddy binary — `caddy list-modules | grep cloudflare`.)
-The service `VITE_*_URL`s are relative paths, so they're scheme-agnostic; when you switch to HTTPS
-only update the origin-bearing vars (`VITE_EDITOR_URL`, `VITE_EMBED_ALLOWED_ORIGINS`) to `https://`.
