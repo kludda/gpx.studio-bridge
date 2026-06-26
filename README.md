@@ -98,8 +98,7 @@ the same protocol with WebDAV storage and an ETag `version`.
 
 To serve the app over real hostnames in any browser (no flags), put a reverse proxy in front routing
 the **two app domains** — `gpxstudio.example.com` → the editor (`:5180`) and `gpx.example.com` → the
-bridge shell (`:5174`) — to their Vite dev servers. Plain HTTP by default; HTTPS (incl. the DNS
-challenge) is a one-line change.
+bridge shell (`:5174`) — to their Vite dev servers.
 
 See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config and TLS notes.
 
