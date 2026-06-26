@@ -7,7 +7,6 @@ last-write-wins via polling.
 
 - `backend/` — FastAPI folder store (a directory of nested `.gpx`; id = relative path; version = mtime).
 - `frontend/` — Vite shell (top bar, Open popup, protocol host half, poll loop).
-- `dev/` — protocol mocks (`fake-editor.html`, `fake-host.html`) for testing without the real editor.
 
 ## Run
 
@@ -36,8 +35,8 @@ Run the **editor** (the gpx.studio fork, `embedded-dev`) separately, with `--hos
 `.`-prefixed domain) to `server.allowedHosts` in both Vite configs if Vite rejects the `Host` header.
 
 Then open **`http://$HOST:5174`** in a normal browser (no `--disable-web-security` needed — the
-gpx.studio services and `/api` are proxied same-origin by the two Vite servers). Leave
-`VITE_EDITOR_URL` unset to use the mock `fake-editor.html` instead of the real editor.
+gpx.studio services and `/api` are proxied same-origin by the two Vite servers). `VITE_EDITOR_URL`
+is required — the shell frames whatever editor origin it points at.
 
 Config: `frontend/.env` (`VITE_API_BASE`, `VITE_EDITOR_URL`, `VITE_POLL_MS`) and `backend/.env`
 (`GPX_DATA_DIR`, `ROOT_PATH`, loaded via uvicorn's `--env-file`); see the `.env.example` files.

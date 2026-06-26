@@ -12,11 +12,11 @@ const POLL_MS = Number(import.meta.env.VITE_POLL_MS) || 2000;
 
 // --------------------------------------------------------------------------- //
 // Config + origins. The shell (this page) and the editor (iframe) are different
-// origins in M8; in the M1–M4 mock the fake-editor is served same-origin from
-// publicDir. Either way we derive the editor's origin from its URL and only
-// trust messages from it.
+// origins; we derive the editor's origin from its URL and only trust messages
+// from it. VITE_EDITOR_URL is required — there is no built-in editor.
 // --------------------------------------------------------------------------- //
-const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || '/fake-editor.html';
+const EDITOR_URL = import.meta.env.VITE_EDITOR_URL;
+if (!EDITOR_URL) throw new Error('VITE_EDITOR_URL is required (the editor origin to frame)');
 const editorFrame = document.getElementById('editor');
 editorFrame.src = EDITOR_URL;
 const EDITOR_ORIGIN = new URL(EDITOR_URL, location.href).origin;

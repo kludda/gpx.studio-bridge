@@ -7,7 +7,6 @@ the architecture, the poll-based collaboration design, CORS, and reverse-proxy s
 ## Layout
 - `backend/` — FastAPI folder store (nested `.gpx`; id = relative path; version = mtime).
 - `frontend/` — Vite shell (top bar, Open popup, protocol host half, poll loop).
-- `dev/` — protocol mocks (`fake-editor.html`, `fake-host.html`) for testing without the real editor.
 
 ## Branches & commits
 - `dev` — **default working branch**; commit at will, push often (remote backup).
