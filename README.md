@@ -14,53 +14,43 @@ The bridge is two processes — the **backend** store and the **frontend** shell
 bind to all interfaces (`--host`) so other machines on the LAN can reach the shell. The backend stays
 on `localhost` — only the shell's Vite `/api` proxy reaches it, server-side.
 
-```bash
-HOST=192.168.1.50    # this machine's LAN IP (e.g. `hostname -I`)
+Config lives in `frontend/.env` and `backend/.env`. The `.env.example` files document each var — copy and edit them.
 
+```bash
 # 1. Backend — folder store on :3001 (interactive API docs at /api/docs and /api/redoc)
 cd backend
 python -m venv .venv && .venv/bin/pip install -r requirements.txt   # first time
-cp .env.example .env                                                # first time; edit GPX_DATA_DIR / ROOT_PATH=/api
+cp .env.example .env                                                # first time; edit .env
 .venv/bin/uvicorn main:app --reload --port 3001 --env-file .env
 
-# 2. Frontend shell — :5174, point the iframe at $HOST's editor
+# 2. Frontend shell — :5174, point the iframe at the editor
 cd ../frontend
 npm install                                                         # first time
-cp .env.example .env                                                # first time; set VITE_API_BASE=/api and VITE_EDITOR_URL=http://$HOST:5180/app?embedded=1
+cp .env.example .env                                                # first time; edit. env
 npm run dev -- --host
 ```
 
-Run the **editor** (the gpx.studio fork, `embedded-dev`) separately, with `--host` — see
-[`../gpx.studio/README-EMBEDDED.md`](../gpx.studio/README-EMBEDDED.md). If Vite rejects the editor's
-`Host` header, add `$HOST` (or a `.`-prefixed domain) to `server.allowedHosts` in its `vite.config.ts`.
+Run the **editor** [gpx.studio fork with added embedded mode](https://github.com/kludda/gpx.studio) separately, see
+[`gpx.studio/README-EMBEDDED.md`](https://github.com/kludda/gpx.studio/blob/embedded/README-EMBEDDED.md).
 
-Then open **`http://$HOST:5174`** in a normal browser (no `--disable-web-security` needed — the
-gpx.studio services and `/api` are proxied same-origin by the two Vite servers). `VITE_EDITOR_URL`
-is required — the shell frames whatever editor origin it points at.
+Then open **`http://<host_ip>:5174`** in a browser.
 
 The shell's `frontend/vite.config.js` ships with `allowedHosts: true`, so it accepts any `Host` and
 works behind any hostname on a trusted LAN with no edits. Vite's host check guards against
 DNS-rebinding attacks on the dev server, though — **if you expose the shell beyond a trusted LAN,
 replace `true` with an allowlist of your real hostnames** (e.g. `['.example.com']`).
 
-Config lives in `frontend/.env` (`VITE_API_BASE`, `VITE_EDITOR_URL`, `VITE_POLL_MS`) and `backend/.env`
-(`GPX_DATA_DIR`, `ROOT_PATH`, loaded via uvicorn's `--env-file`). The `.env.example` files document
-each var with both its direct and reverse-proxy values — copy and edit them.
-
 ## The embed protocol (postMessage)
 
 The editor↔host `postMessage` protocol — handshake, the `event`/`action` message tables, and
 promotion — is documented with the editor, in
-**[`../gpx.studio/README-EMBEDDED.md`](../gpx.studio/README-EMBEDDED.md)**. The bridge implements the
-**host** half: `frontend/src/main.js` handles inbound `event`s over the FastAPI folder store
-(`backend/`).
+**[`gpx.studio/README-EMBEDDED.md`](https://github.com/kludda/gpx.studio/blob/embedded/README-EMBEDDED.md)**. 
+The bridge implements the **host** half.
 
 ### Collaboration (poll-based, no websocket)
 
-Storage, identity and versioning are the host's. `version` is the file's **mtime in microseconds**
-(`st_mtime_ns // 1000`) — coarser than nanoseconds but under JS's `Number.MAX_SAFE_INTEGER`, so it
-round-trips through the shell's JSON intact (a raw `st_mtime_ns` would round in JS and break the
-conflict check below). The host keeps a `registry` (`hostId → version`) and an `openIds` set of files
+Storage, identity and versioning are the host's. `version` is the file's **mtime in microseconds**.
+The host keeps a `registry` (`hostId → version`) and an `openIds` set of files
 currently framed in the editor; **only open files are synced.**
 
 **Steady-state poll.** Every `VITE_POLL_MS` the host `GET /files` and, per open file, compares the
@@ -89,8 +79,7 @@ losing edit is **discarded** (whole-file LWW, no field-level merge). `baseVersio
 check (a first/forced save). This is the one deliberate departure from pure last-write-wins, traded
 for not silently losing an already-committed save.
 
-**Connection loss.** If the backend (or an auth gateway in front of it — e.g. an expired Cloudflare
-tunnel) becomes unreachable, the poll's `GET /files` fails: the shell shows `⚠ disconnected (N failed
+**Connection loss.** If the backend becomes unreachable, the poll's `GET /files` fails: the shell shows `⚠ disconnected (N failed
 polls)` and re-sends a **global notice every tick** — `{action:'status', ok:false, message}` with
 **no `id`** — which the editor renders as one sticky toast ("Connection lost, please reload browser")
 that auto-clears on recovery. The `frontend/src/api.js` client treats redirected, non-JSON, and
