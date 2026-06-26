@@ -7,9 +7,12 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
-    // [embed] Allow the reverse-proxied host (gpx.eel.se) through Vite's host check.
-    // Leading dot = the domain and all its subdomains.
-    allowedHosts: ['.eel.se'],
+    // [embed] Accept any Host header. Vite's host check guards against DNS-rebinding
+    // attacks on the dev server; `true` disables it so the shell works behind any
+    // reverse-proxied hostname with no per-domain edits. Fine for this LAN-bound POC —
+    // if you expose it beyond a trusted LAN, replace with an allowlist of your real
+    // hostnames, e.g. ['.example.com'] (leading dot = domain + all subdomains).
+    allowedHosts: true,
     // [embed] Proxy the FastAPI backend through this dev server so the shell calls it
     // same-origin via VITE_API_BASE=/api — keeps it out of the external proxy, and the
     // browser never needs to reach :3001 directly (the hop is server-side here).

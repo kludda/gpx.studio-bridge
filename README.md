@@ -31,12 +31,17 @@ VITE_API_BASE=/api VITE_EDITOR_URL=http://$HOST:5180/app?embedded=1 npm run dev 
 ```
 
 Run the **editor** (the gpx.studio fork, `embedded-dev`) separately, with `--host` — see
-[`../gpx.studio/README-EMBEDDED.md`](../gpx.studio/README-EMBEDDED.md). Add `$HOST` (or a
-`.`-prefixed domain) to `server.allowedHosts` in both Vite configs if Vite rejects the `Host` header.
+[`../gpx.studio/README-EMBEDDED.md`](../gpx.studio/README-EMBEDDED.md). If Vite rejects the editor's
+`Host` header, add `$HOST` (or a `.`-prefixed domain) to `server.allowedHosts` in its `vite.config.ts`.
 
 Then open **`http://$HOST:5174`** in a normal browser (no `--disable-web-security` needed — the
 gpx.studio services and `/api` are proxied same-origin by the two Vite servers). `VITE_EDITOR_URL`
 is required — the shell frames whatever editor origin it points at.
+
+The shell's `frontend/vite.config.js` ships with `allowedHosts: true`, so it accepts any `Host` and
+works behind any hostname on a trusted LAN with no edits. Vite's host check guards against
+DNS-rebinding attacks on the dev server, though — **if you expose the shell beyond a trusted LAN,
+replace `true` with an allowlist of your real hostnames** (e.g. `['.example.com']`).
 
 Config lives in `frontend/.env` (`VITE_API_BASE`, `VITE_EDITOR_URL`, `VITE_POLL_MS`) and `backend/.env`
 (`GPX_DATA_DIR`, `ROOT_PATH`, loaded via uvicorn's `--env-file`). The `.env.example` files document
@@ -108,9 +113,10 @@ list them).
 ### Vite host check
 
 Vite's dev server rejects `Host` headers it isn't told to trust (`Blocked request. This host … is
-not allowed.`). Add your proxied hostnames to `server.allowedHosts` in **both** Vite configs —
-`frontend/vite.config.js` (this shell) and `gpx.studio/website/vite.config.ts` (the editor). A
-leading-dot wildcard covers a domain and all its subdomains:
+not allowed.`). The shell ships with `allowedHosts: true` (accepts any host — see [Run](#run) for the
+DNS-rebinding caveat), so only the **editor**'s `gpx.studio/website/vite.config.ts` needs your
+proxied hostnames added to `server.allowedHosts`. A leading-dot wildcard covers a domain and all its
+subdomains:
 
 ```js
 server: { /* … */ allowedHosts: ['.example.com'] }
