@@ -1,8 +1,8 @@
 """Bridge backend — a FastAPI folder store for the embedded-gpx.studio POC.
 
 The host owns the files. This serves a directory of nested ``.gpx`` files where
-the **file id is its relative path** (no sidecar). ``version`` is ``st_mtime_ns``,
-used by the shell's poll loop for last-write-wins collaboration.
+the **file id is its relative path** (no sidecar). ``version`` is an opaque
+mtime-based token, used by the shell's poll loop for last-write-wins collaboration.
 
 Run:  GPX_DATA_DIR=/path/to/scratch uvicorn main:app --reload --port 3001
 """
@@ -36,7 +36,7 @@ app = FastAPI(
     description=(
         "Folder store for the embedded-gpx.studio POC. The host owns the files; "
         "this serves a directory of nested `.gpx` files where the **file id is its "
-        "relative path** (no sidecar) and `version` is the file's `st_mtime_ns`.\n\n"
+        "relative path** (no sidecar) and `version` is an opaque mtime-based token.\n\n"
         "The Vite shell's poll loop reads `version` to detect out-of-band edits and "
         "apply **last-write-wins** collaboration. Interactive docs: `/docs` "
         "(Swagger UI) and `/redoc`."
@@ -121,7 +121,7 @@ def _metadata_name(p: Path) -> str | None:
 # --------------------------------------------------------------------------- #
 class FileEntry(BaseModel):
     path: str = Field(description="File id: path relative to the data root, e.g. `trips/day1.gpx`.")
-    version: int = Field(description="Opaque version token (`st_mtime_ns`); compared by the poll loop.")
+    version: int = Field(description="Opaque version token; compared by the poll loop.")
     name: str | None = Field(
         default=None,
         description=(
@@ -133,7 +133,7 @@ class FileEntry(BaseModel):
 
 class FileContent(BaseModel):
     path: str = Field(description="File id: path relative to the data root.")
-    version: int = Field(description="Opaque version token (`st_mtime_ns`) at read time.")
+    version: int = Field(description="Opaque version token at read time.")
     data: str = Field(description="Raw GPX XML contents of the file.")
 
 
@@ -173,7 +173,7 @@ def list_files(
 
     Walks the data directory recursively and returns one ``{path, version}``
     entry per ``.gpx`` file, sorted by path. ``path`` is the file id (its path
-    relative to the data root); ``version`` is ``st_mtime_ns``. With
+    relative to the data root); ``version`` is an opaque mtime-based token. With
     ``?with_name=1`` each entry also carries the file's ``<metadata><name>`` in
     ``name`` (for the Open popup's label). Drives the shell's Open popup and the
     poll loop that detects out-of-band changes for last-write-wins collaboration.
