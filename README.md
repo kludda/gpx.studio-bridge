@@ -44,27 +44,9 @@ replace `true` with an allowlist of your real hostnames** (e.g. `['.example.com'
 ## Google Maps link → waypoint
 
 The top bar's **"Maps link…"** popup turns a Google Maps link into a GPX waypoint. Paste a link
-(or the whole "share" text Google produces) and **Convert** — the result is shown in the popup as a
+ and **Convert** — the result is shown in the popup as a
 single-`<wpt>` GPX document. This is a standalone utility: it does **not** touch the store or the
 editor yet (a later step will drop the `<wpt>` into the active file).
-
-All the work happens server-side, in `backend/maps_convert.py` (`POST /convert`, ported from
-[garmin-nav-exporter](https://github.com/bramveen1/garmin-nav-exporter/blob/main/api/convert.js)).
-A browser can't do it because a "share" short link (`maps.app.goo.gl/…`) carries no coordinates and
-its redirect is opaque cross-origin. The endpoint:
-
-1. Reads coordinates straight from the URL when present — `!3d…!4d…` (the exact pin, preferred),
-   `@lat,lng` (viewport center), `/maps/search/<lat>,<lng>`, or `?q=lat,lng`.
-2. Otherwise **follows the redirect** (mobile User-Agent), unwrapping Google's `consent.google.*`
-   interstitial via its `continue=` target, then re-parses and scrapes the resolved page.
-3. As a last resort, geocodes a `q=<address>` via Nominatim.
-
-Returns `{lat, lng, name, source, gpx}`, or **400** (no link found) / **422** (no coordinates) /
-**502** (couldn't reach Google).
-
-> **Caveat:** from a datacenter IP, Google forces the `consent.google.*` redirect. Real share links
-> still resolve (the coordinates ride along in the consent `continue=` target), but a *coordless*
-> place page can't be scraped from such a host.
 
 ## The embed protocol (postMessage)
 
