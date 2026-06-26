@@ -38,8 +38,9 @@ Then open **`http://$HOST:5174`** in a normal browser (no `--disable-web-securit
 gpx.studio services and `/api` are proxied same-origin by the two Vite servers). `VITE_EDITOR_URL`
 is required — the shell frames whatever editor origin it points at.
 
-Config: `frontend/.env` (`VITE_API_BASE`, `VITE_EDITOR_URL`, `VITE_POLL_MS`) and `backend/.env`
-(`GPX_DATA_DIR`, `ROOT_PATH`, loaded via uvicorn's `--env-file`); see the `.env.example` files.
+Config lives in `frontend/.env` (`VITE_API_BASE`, `VITE_EDITOR_URL`, `VITE_POLL_MS`) and `backend/.env`
+(`GPX_DATA_DIR`, `ROOT_PATH`, loaded via uvicorn's `--env-file`). The `.env.example` files document
+each var with both its direct and reverse-proxy values — copy and edit them.
 
 ## The embed protocol (postMessage)
 
@@ -100,33 +101,9 @@ To serve the app over real hostnames in any browser (no flags), put a reverse pr
 the **two app domains** — `gpxstudio.example.com` → the editor (`:5180`) and `gpx.example.com` → the
 bridge shell (`:5174`) — to their Vite dev servers.
 
-See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config and TLS notes.
-
-### Matching env
-
-**Bridge shell** (`frontend/.env`) — backend is same-origin via the Vite `/api` proxy, editor is its
-own host:
-
-```ini
-VITE_API_BASE=/api
-VITE_EDITOR_URL=http://gpxstudio.example.com/app?embedded=1
-```
-
-`VITE_EDITOR_URL` is also the source of the bridge's `EDITOR_ORIGIN` (used to target outbound
-postMessage and to validate inbound), so it must be the editor's real origin. Each side allows the
-**other's** origin, never its own.
-
-**Backend** — the bridge's `/api` Vite proxy strips the `/api` prefix, so tell FastAPI its public
-prefix so the auto-generated docs reference `/api/openapi.json` (not `/openapi.json` at the site
-root). Set `ROOT_PATH` on launch:
-
-```bash
-GPX_DATA_DIR=/path/to/scratch ROOT_PATH=/api .venv/bin/uvicorn main:app --port 3001
-```
-
-The interactive docs are then at **`http://gpx.example.com/api/docs`** (Swagger UI) and
-`…/api/redoc` (ReDoc); the schema is at `…/api/openapi.json`. Leave `ROOT_PATH` unset for direct
-access (`localhost:3001/docs`). Equivalent without the env var: `uvicorn … --root-path /api`.
+See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config and TLS notes. Set the
+matching reverse-proxy env values in `frontend/.env` and `backend/.env` (the `.env.example` files
+list them).
 
 ### Vite host check
 
