@@ -26,7 +26,7 @@ cp .env.example .env                                                # first time
 # 2. Frontend shell — :5174, point the iframe at the editor
 cd ../frontend
 npm install                                                         # first time
-cp .env.example .env                                                # first time; edit. env
+cp .env.example .env                                                # first time; edit .env
 npm run dev -- --host
 ```
 
