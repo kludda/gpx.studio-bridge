@@ -1,9 +1,8 @@
 # gpx.studio-bridge (reference host) — Claude Code working rules
 
 The host half of the embed POC: a FastAPI folder store + a Vite shell that frames the editor. Usage,
-the poll-based collaboration design, CORS, and reverse-proxy setup live in **`README.md`**;
-architecture and build order are in the workspace `../plan.md`. This file is only how to work in this
-repo.
+the architecture, the poll-based collaboration design, CORS, and reverse-proxy setup live in
+**`README.md`**. This file is only how to work in this repo.
 
 ## Layout
 - `backend/` — FastAPI folder store (nested `.gpx`; id = relative path; version = mtime).
@@ -15,7 +14,7 @@ repo.
 - `main` — tidy; **only squashed large commits, and only when explicitly asked.**
 - Commit from this repo (`git -C gpx.studio-bridge …`); never `git` at the workspace root.
 
-## Invariants (never violate — see `../plan.md` for the why)
+## Invariants (never violate — see `README.md` for the why)
 - The host owns **storage, identity and versioning**; the editor owns no files.
 - Only `id` (the file's store-relative path) crosses postMessage — the editor's `gpx-N` local ids
   never reach the host.
