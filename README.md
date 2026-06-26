@@ -44,7 +44,7 @@ replace `true` with an allowlist of your real hostnames** (e.g. `['.example.com'
 
 The editor↔host `postMessage` protocol — handshake, the `event`/`action` message tables, and
 promotion — is documented with the editor, in
-**[`gpx.studio/README-EMBEDDED.md`](https://github.com/kludda/gpx.studio/blob/embedded/README-EMBEDDED.md)**. 
+**[`gpx.studio/README-EMBEDDED.md`](https://github.com/kludda/gpx.studio/blob/embedded/README-EMBEDDED.md)**.
 The bridge implements the **host** half.
 
 ### Collaboration (poll-based, no websocket)
@@ -79,8 +79,9 @@ losing edit is **discarded** (whole-file LWW, no field-level merge). `baseVersio
 check (a first/forced save). This is the one deliberate departure from pure last-write-wins, traded
 for not silently losing an already-committed save.
 
-**Connection loss.** If the backend becomes unreachable, the poll's `GET /files` fails: the shell shows `⚠ disconnected (N failed
-polls)` and re-sends a **global notice every tick** — `{action:'status', ok:false, message}` with
+**Connection loss.** If the backend becomes unreachable, the poll's `GET /files` fails: the shell
+shows `⚠ disconnected — <error>` (with a `(N failed polls)` suffix from the second failure on) and
+re-sends a **global notice every tick** — `{action:'status', ok:false, message}` with
 **no `id`** — which the editor renders as one sticky toast ("Connection lost, please reload browser")
 that auto-clears on recovery. The `frontend/src/api.js` client treats redirected, non-JSON, and
 network-error responses as failures (and validates the response shape), so a save attempted while
