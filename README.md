@@ -109,15 +109,3 @@ bridge shell (`:5174`) — to their Vite dev servers.
 See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config and TLS notes. Set the
 matching reverse-proxy env values in `frontend/.env` and `backend/.env` (the `.env.example` files
 list them).
-
-### Vite host check
-
-Vite's dev server rejects `Host` headers it isn't told to trust (`Blocked request. This host … is
-not allowed.`). The shell ships with `allowedHosts: true` (accepts any host — see [Run](#run) for the
-DNS-rebinding caveat), so only the **editor**'s `gpx.studio/website/vite.config.ts` needs your
-proxied hostnames added to `server.allowedHosts`. A leading-dot wildcard covers a domain and all its
-subdomains:
-
-```js
-server: { /* … */ allowedHosts: ['.example.com'] }
-```
