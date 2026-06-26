@@ -1,9 +1,8 @@
 # Caddyfile.example — reverse proxy for the gpx.studio embed POC.
 #
-# Routes the TWO app domains to their Vite dev servers. The gpx.studio
-# services and the bridge backend are proxied *inside* Vite (see the README
-# "CORS" section), so this proxy is just two dumb routes — no /api or
-# service hops to configure here.
+# Routes the TWO app domains to their Vite dev servers. The bridge backend
+# is proxied *inside* Vite (the shell's /api → :3001), so this proxy is just
+# two dumb routes — no /api or service hops to configure here.
 #
 # Setup: replace <server-ip> with the machine running the dev servers
 # (e.g. `hostname -I`) and example.com with your domain.

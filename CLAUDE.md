@@ -1,7 +1,7 @@
 # gpx.studio-bridge (reference host) — Claude Code working rules
 
 The host half of the embed POC: a FastAPI folder store + a Vite shell that frames the editor. Usage,
-the architecture, the poll-based collaboration design, CORS, and reverse-proxy setup live in
+the architecture, the poll-based collaboration design, and reverse-proxy setup live in
 **`README.md`**. This file is only how to work in this repo.
 
 ## Layout

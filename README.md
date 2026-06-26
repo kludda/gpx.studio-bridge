@@ -94,23 +94,12 @@ down fails loudly instead of masquerading as saved.
 Whole-file replace throughout — deliberately simple. A real platform host (OpenCloud/Nextcloud) is
 the same protocol with WebDAV storage and an ETag `version`.
 
-## CORS (gpx.studio services)
-
-gpx.studio's `graphhopper`/`overpass` services are CORS-locked to `https://gpx.studio`. The **editor**
-fixes this itself by proxying them through its own Vite dev server (same-origin fetch → no CORS) —
-see the CORS-fix section in
-**[`../gpx.studio/README-EMBEDDED.md`](../gpx.studio/README-EMBEDDED.md)**. The bridge does the
-analogous thing for its own store: `frontend/vite.config.js` proxies `/api` → `:3001` so the shell
-calls the backend same-origin. Because both are handled inside Vite, the external reverse proxy below
-only has to route the two app domains.
-
 ## Reverse proxy
 
 To serve the app over real hostnames in any browser (no flags), put a reverse proxy in front routing
 the **two app domains** — `gpxstudio.example.com` → the editor (`:5180`) and `gpx.example.com` → the
-bridge shell (`:5174`) — to their Vite dev servers. The gpx.studio services and the bridge backend
-are proxied *inside* Vite (see [CORS](#cors-gpxstudio-services) above), so the external proxy is just
-those two routes. Plain HTTP by default; HTTPS (incl. the DNS challenge) is a one-line change.
+bridge shell (`:5174`) — to their Vite dev servers. Plain HTTP by default; HTTPS (incl. the DNS
+challenge) is a one-line change.
 
 See **[`Caddyfile.example`](Caddyfile.example)** for the ready-to-edit config and TLS notes.
 
